@@ -23,6 +23,7 @@ primitive_symmetry_loss_v3 = _primitive_gen_module.primitive_symmetry_loss_v3
 primitive_aligning_loss_v2 = _primitive_gen_module.primitive_aligning_loss_v2
 primitive_cube_volume_v2 = _primitive_gen_module.primitive_cube_volume_v2
 primitive_cube_area_average_loss = _primitive_gen_module.primitive_cube_area_average_loss
+primitive_points_suffix_index = _primitive_gen_module.primitive_points_suffix_index
 
 primitive_mutex_loss_v3_grad = _primitive_gen_module.primitive_mutex_loss_v3_grad
 primitive_cube_coverage_loss_v3_grad = _primitive_gen_module.primitive_cube_coverage_loss_v3_grad
@@ -36,6 +37,7 @@ primitive_cube_area_average_loss_grad = _primitive_gen_module.primitive_cube_are
 ops.NotDifferentiable('OctreeDatabase')
 ops.NotDifferentiable('PtimitiveGroupPointsV3')
 ops.NotDifferentiable('PrimitiveCubeVolumeV2')
+ops.NotDifferentiable("PrimitivePointsSuffixIndex")
 
 
 @ops.RegisterGradient('OctreeConv')
