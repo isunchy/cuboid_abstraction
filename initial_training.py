@@ -12,7 +12,7 @@ from decoder import *
 from loss_function import *
 
 
-tf.app.flags.DEFINE_string('log_dir', 'log/training_from_scratch/PGen_xxxx/0_16_8_4_airplane_0',
+tf.app.flags.DEFINE_string('log_dir', 'log/initial_training/PGen_xxxx/0_16_8_4_airplane_0',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 tf.app.flags.DEFINE_string('train_data', 
@@ -68,6 +68,7 @@ tf.app.flags.DEFINE_integer('num_points_in_points_file', 5000,
 
 FLAGS = tf.app.flags.FLAGS
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
 max_iter = FLAGS.max_iter
