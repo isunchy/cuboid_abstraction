@@ -84,7 +84,6 @@ n_points = FLAGS.num_points_in_points_file
 for key, value in tf.app.flags.FLAGS.flag_values_dict().items():
   print('{}: {}'.format(key, value))
 print('====')
-# todo: save params in file in log folder, and add time in file name.
 sys.stdout.flush()
 
 
