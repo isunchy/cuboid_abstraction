@@ -466,6 +466,7 @@ def main(argv=None):
       mask_1, mask_2, mask_3] = test_network()
 
   # checkpoint
+  assert(os.path.exists(FLAGS.ckpt))
   ckpt = tf.train.latest_checkpoint(FLAGS.ckpt)
   start_iters = 0
   if FLAGS.stage == 'mask_predict' and 'mask_predict' in FLAGS.ckpt:
@@ -723,7 +724,7 @@ def main(argv=None):
                          average_test_loss: avg_test_loss
                          })
           summary_writer.add_summary(summary, i)
-          if i % (FLAGS.test_every_n_steps * 5) == 0:
+          if i % (FLAGS.disp_every_n_steps) == 0:
             tf_saver.save(sess, os.path.join(FLAGS.log_dir, 'model/iter{:06d}.ckpt'.format(i)))
 
         summary, _ = sess.run([train_summary, solver])

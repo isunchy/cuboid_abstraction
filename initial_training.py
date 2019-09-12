@@ -326,6 +326,7 @@ def main(argv=None):
 
   tf_saver = tf.train.Saver(var_list=save_vars, max_to_keep=100)
   if ckpt:
+    assert(os.path.exists(FLAGS.ckpt))
     tf_restore_saver = tf.train.Saver(var_list=restore_vars, max_to_keep=100)
 
   config = tf.ConfigProto()
@@ -468,7 +469,7 @@ def main(argv=None):
 
           summary = sess.run(test_summary, feed_dict={average_test_loss: avg_test_loss})
           summary_writer.add_summary(summary, i)
-          if i % (FLAGS.test_every_n_steps * 5) == 0:
+          if i % (FLAGS.disp_every_n_steps) == 0:
             tf_saver.save(sess, os.path.join(FLAGS.log_dir, 'model/iter{:06d}.ckpt'.format(i)))
 
         summary, _ = sess.run([train_summary, solver])
