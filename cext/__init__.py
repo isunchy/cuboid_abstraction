@@ -1,5 +1,5 @@
-import tensorflow as tf
 import os
+import tensorflow as tf
 from tensorflow.python.framework import ops
 
 _current_path = os.path.dirname(os.path.realpath(__file__))
@@ -42,6 +42,15 @@ primitive_cube_coverage_loss_v4 = _primitive_gen_module.primitive_cube_coverage_
 primitive_coverage_split_loss_v3_grad = _primitive_gen_module.primitive_coverage_split_loss_v3_grad
 primitive_consistency_split_loss_grad = _primitive_gen_module.primitive_consistency_split_loss_grad
 primitive_cube_coverage_loss_v4_grad = _primitive_gen_module.primitive_cube_coverage_loss_v4_grad
+
+# cube update
+primitive_coverage_select_loss = _primitive_gen_module.primitive_coverage_select_loss
+primitive_consistency_select_loss = _primitive_gen_module.primitive_consistency_select_loss
+primitive_mutex_select_loss = _primitive_gen_module.primitive_mutex_select_loss
+
+primitive_coverage_select_loss_grad = _primitive_gen_module.primitive_coverage_select_loss_grad
+primitive_consistency_select_loss_grad = _primitive_gen_module.primitive_consistency_select_loss_grad
+primitive_mutex_select_loss_grad = _primitive_gen_module.primitive_mutex_select_loss_grad
 
 
 ops.NotDifferentiable('OctreeDatabase')
@@ -169,4 +178,36 @@ def _PrimitiveCubeCoverageLossV4Grad(op, *grad):
                                               op.inputs[3],
                                               op.inputs[4],
                                               op.get_attr('n_src_cube')) + \
+         (None, None)
+
+@ops.RegisterGradient("PrimitiveMutexSelectLoss")
+def _PrimitiveMutexSelectLossGrad(op, grad):
+  return primitive_mutex_select_loss_grad(grad,
+                                      op.inputs[0],
+                                      op.inputs[1],
+                                      op.inputs[2],
+                                      op.inputs[3],
+                                      op.get_attr("scale")) + \
+         (None,)
+
+@ops.RegisterGradient("PrimitiveCoverageSelectLoss")
+def _PrimitiveCoverageSelectLossGrad(op, grad):
+  return primitive_coverage_select_loss_grad(grad,
+                                         op.inputs[0],
+                                         op.inputs[1],
+                                         op.inputs[2],
+                                         op.inputs[3],
+                                         op.inputs[4]) + \
+         (None, None)
+
+@ops.RegisterGradient("PrimitiveConsistencySelectLoss")
+def _PrimitiveConsistencySelectLossGrad(op, grad):
+  return primitive_consistency_select_loss_grad(grad,
+                                            op.inputs[0],
+                                            op.inputs[1],
+                                            op.inputs[2],
+                                            op.inputs[3],
+                                            op.inputs[4],
+                                            op.get_attr("scale"),
+                                            op.get_attr("num_sample")) + \
          (None, None)

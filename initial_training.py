@@ -352,7 +352,7 @@ def main(argv=None):
     if FLAGS.test:
       for it in range(test_iter):
         [test_loss_total_value,
-            cube_params_value_1, cube_params_value_2, cube_params_value_3,
+            cube_params_1_value, cube_params_2_value, cube_params_3_value,
             node_position_value,
             latent_code_value
             ] = sess.run([
@@ -364,9 +364,9 @@ def main(argv=None):
         print('Iter {} loss: {}'.format(it, test_loss_total_value))
 
         with open(os.path.join(dump_dir, 'cube_1_{:04d}.txt'.format(it)), 'w') as f:
-          z = np.reshape(cube_params_value_1[0], [n_part_1, 3])
-          q = np.reshape(cube_params_value_1[1], [n_part_1, 4])
-          t = np.reshape(cube_params_value_1[2], [n_part_1, 3])
+          z = np.reshape(cube_params_1_value[0], [n_part_1, 3])
+          q = np.reshape(cube_params_1_value[1], [n_part_1, 4])
+          t = np.reshape(cube_params_1_value[2], [n_part_1, 3])
           for j in range(n_part_1):
             f.write('{} {} {} '.format(z[j][0], z[j][1], z[j][2]))
             f.write('{} {} {} {} '.format(q[j][0], q[j][1], q[j][2], q[j][3]))
@@ -376,9 +376,9 @@ def main(argv=None):
         vis_primitive.save_parts(cube_params, obj_filename)
 
         with open(os.path.join(dump_dir, 'cube_2_{:04d}.txt'.format(it)), 'w') as f:
-          z = np.reshape(cube_params_value_2[0], [n_part_2, 3])
-          q = np.reshape(cube_params_value_2[1], [n_part_2, 4])
-          t = np.reshape(cube_params_value_2[2], [n_part_2, 3])
+          z = np.reshape(cube_params_2_value[0], [n_part_2, 3])
+          q = np.reshape(cube_params_2_value[1], [n_part_2, 4])
+          t = np.reshape(cube_params_2_value[2], [n_part_2, 3])
           for j in range(n_part_2):
             f.write('{} {} {} '.format(z[j][0], z[j][1], z[j][2]))
             f.write('{} {} {} {} '.format(q[j][0], q[j][1], q[j][2], q[j][3]))
@@ -388,9 +388,9 @@ def main(argv=None):
         vis_primitive.save_parts(cube_params, obj_filename)
 
         with open(os.path.join(dump_dir, 'cube_3_{:04d}.txt'.format(it)), 'w') as f:
-          z = np.reshape(cube_params_value_3[0], [n_part_3, 3])
-          q = np.reshape(cube_params_value_3[1], [n_part_3, 4])
-          t = np.reshape(cube_params_value_3[2], [n_part_3, 3])
+          z = np.reshape(cube_params_3_value[0], [n_part_3, 3])
+          q = np.reshape(cube_params_3_value[1], [n_part_3, 4])
+          t = np.reshape(cube_params_3_value[2], [n_part_3, 3])
           for j in range(n_part_3):
             f.write('{} {} {} '.format(z[j][0], z[j][1], z[j][2]))
             f.write('{} {} {} {} '.format(q[j][0], q[j][1], q[j][2], q[j][3]))
@@ -401,9 +401,10 @@ def main(argv=None):
 
         np.savetxt(os.path.join(dump_dir, 'node_position_{:04d}.txt'.format(it)), node_position_value)
         np.savetxt(os.path.join(dump_dir, 'latent_code_{:04d}.txt'.format(it)), np.reshape(latent_code_value, [-1]))
-        pc_filename = os.path.join(obj_dir, 'pc_{:04d}.obj'.format(it))
-        vis_pointcloud.save_points(np.transpose(node_position_value),
-            pc_filename, depth=6)
+        # pc_filename = os.path.join(obj_dir, 'pc_{:04d}.obj'.format(it))
+        # vis_pointcloud.save_points(np.transpose(node_position_value),
+        #     pc_filename, depth=6)
+
     else:
       # start training
       for i in range(start_iters, max_iter):
@@ -414,7 +415,7 @@ def main(argv=None):
           avg_test_loss = 0
           for it in range(test_iter):
             [test_loss_total_value,
-                cube_params_value_1, cube_params_value_2, cube_params_value_3,
+                cube_params_1_value, cube_params_2_value, cube_params_3_value,
                 node_position_value
                 ] = sess.run([
                     test_loss,
@@ -424,9 +425,9 @@ def main(argv=None):
 
             if i % FLAGS.disp_every_n_steps == 0:
               with open(os.path.join(dump_dir, 'cube_1_{:06d}_{:04d}.txt'.format(i, it)), 'w') as f:
-                z = np.reshape(cube_params_value_1[0], [n_part_1, 3])
-                q = np.reshape(cube_params_value_1[1], [n_part_1, 4])
-                t = np.reshape(cube_params_value_1[2], [n_part_1, 3])
+                z = np.reshape(cube_params_1_value[0], [n_part_1, 3])
+                q = np.reshape(cube_params_1_value[1], [n_part_1, 4])
+                t = np.reshape(cube_params_1_value[2], [n_part_1, 3])
                 for j in range(n_part_1):
                   f.write('{} {} {} '.format(z[j][0], z[j][1], z[j][2]))
                   f.write('{} {} {} {} '.format(q[j][0], q[j][1], q[j][2], q[j][3]))
@@ -436,9 +437,9 @@ def main(argv=None):
               vis_primitive.save_parts(cube_params, obj_filename)
 
               with open(os.path.join(dump_dir, 'cube_2_{:06d}_{:04d}.txt'.format(i, it)), 'w') as f:
-                z = np.reshape(cube_params_value_2[0], [n_part_2, 3])
-                q = np.reshape(cube_params_value_2[1], [n_part_2, 4])
-                t = np.reshape(cube_params_value_2[2], [n_part_2, 3])
+                z = np.reshape(cube_params_2_value[0], [n_part_2, 3])
+                q = np.reshape(cube_params_2_value[1], [n_part_2, 4])
+                t = np.reshape(cube_params_2_value[2], [n_part_2, 3])
                 for j in range(n_part_2):
                   f.write('{} {} {} '.format(z[j][0], z[j][1], z[j][2]))
                   f.write('{} {} {} {} '.format(q[j][0], q[j][1], q[j][2], q[j][3]))
@@ -448,9 +449,9 @@ def main(argv=None):
               vis_primitive.save_parts(cube_params, obj_filename)
 
               with open(os.path.join(dump_dir, 'cube_3_{:06d}_{:04d}.txt'.format(i, it)), 'w') as f:
-                z = np.reshape(cube_params_value_3[0], [n_part_3, 3])
-                q = np.reshape(cube_params_value_3[1], [n_part_3, 4])
-                t = np.reshape(cube_params_value_3[2], [n_part_3, 3])
+                z = np.reshape(cube_params_3_value[0], [n_part_3, 3])
+                q = np.reshape(cube_params_3_value[1], [n_part_3, 4])
+                t = np.reshape(cube_params_3_value[2], [n_part_3, 3])
                 for j in range(n_part_3):
                   f.write('{} {} {} '.format(z[j][0], z[j][1], z[j][2]))
                   f.write('{} {} {} {} '.format(q[j][0], q[j][1], q[j][2], q[j][3]))

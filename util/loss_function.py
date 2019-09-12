@@ -20,6 +20,10 @@ from cext import primitive_cube_coverage_loss_v4
 from cext import primitive_coverage_split_loss_v3
 from cext import primitive_consistency_split_loss
 from cext import primitive_tree_generation
+# cube update
+from cext import primitive_coverage_select_loss
+from cext import primitive_consistency_select_loss
+from cext import primitive_mutex_select_loss
 
 
 def coverage_loss_v2(cube_params, node_position):
@@ -154,7 +158,7 @@ def mask_sparseness_loss(logit_1, logit_2, logit_3):
 
 
 def shape_similarity_loss(logit_1, logit_2, logit_3, cube_params_1,
-    cube_params_2, cube_params_3, node_position):
+    cube_params_2, cube_params_3, node_position, n_part_1, n_part_2):
   with tf.name_scope('shape_similarity_loss'):
     relation_12 = cube_coverage_loss_v6(cube_params_1, cube_params_2, n_part_1,
         node_position) # [bs, n_part_1]
@@ -200,3 +204,35 @@ def mask_completeness_loss(logit_1, logit_2, logit_3, relation_12, relation_23):
     L3 = tf.batch_gather(logit_3, tf.batch_gather(relation_23, relation_12))
     loss = tf.reduce_mean((L1 + L2 + L3 - 1)**2)
   return loss
+
+
+def coverage_select_loss(cube_params, mask, node_position):
+  with tf.name_scope('select_coverage'):
+    distance = primitive_coverage_select_loss(cube_params[0], cube_params[1],
+        cube_params[2], mask, node_position)
+    distance = tf.reduce_sum(distance)
+  return distance
+
+
+def consistency_select_loss(cube_params, mask, node_position, num_sample=26):
+  with tf.name_scope('select_consistency'):
+    distance = primitive_consistency_select_loss(cube_params[0], cube_params[1],
+        cube_params[2], mask, node_position, scale=1, num_sample=num_sample)
+    distance = tf.reduce_sum(distance)
+  return distance
+
+
+def mutex_select_loss(cube_params, mask):
+  with tf.name_scope('select_mutex'):
+    distance = primitive_mutex_select_loss(cube_params[0], cube_params[1],
+        cube_params[2], mask, scale=0.8)
+    distance = tf.reduce_sum(distance)
+  return distance
+
+
+def compute_selected_tree_loss(cube_params, mask, node_position, phase='one'):
+  with tf.name_scope('compute_tree_loss_' + phase):
+    coverage_distance = coverage_select_loss(cube_params, mask, node_position)
+    consistency_distance = consistency_select_loss(cube_params, mask, node_position)
+    mutex_distance = mutex_select_loss(cube_params, mask)
+  return coverage_distance, consistency_distance, mutex_distance
