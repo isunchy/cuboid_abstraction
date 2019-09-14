@@ -287,7 +287,7 @@ def test_network():
 
   with tf.name_scope('test_summary'):
     average_test_loss = tf.placeholder(tf.float32)
-    summary_test_loss = tf.summary.scalar('average_test_loss',
+    summary_test_loss = tf.summary.scalar('test_loss',
         average_test_loss)
     test_merged = tf.summary.merge([summary_test_loss])
 
