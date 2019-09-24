@@ -373,7 +373,7 @@ def main(argv=None):
             f.write('{} {} {}\n'.format(t[j][0], t[j][1], t[j][2]))
         cube_params = np.loadtxt(os.path.join(dump_dir, 'cube_1_{:04d}.txt'.format(it)))
         obj_filename = os.path.join(obj_dir, 'cube_1_{:04d}.obj'.format(it))
-        vis_primitive.save_parts(cube_params, obj_filename)
+        vis_primitive.save_parts(cube_params, obj_filename, level='1')
 
         with open(os.path.join(dump_dir, 'cube_2_{:04d}.txt'.format(it)), 'w') as f:
           z = np.reshape(cube_params_2_value[0], [n_part_2, 3])
@@ -385,7 +385,7 @@ def main(argv=None):
             f.write('{} {} {}\n'.format(t[j][0], t[j][1], t[j][2]))
         cube_params = np.loadtxt(os.path.join(dump_dir, 'cube_2_{:04d}.txt'.format(it)))
         obj_filename = os.path.join(obj_dir, 'cube_2_{:04d}.obj'.format(it))
-        vis_primitive.save_parts(cube_params, obj_filename)
+        vis_primitive.save_parts(cube_params, obj_filename, level='2')
 
         with open(os.path.join(dump_dir, 'cube_3_{:04d}.txt'.format(it)), 'w') as f:
           z = np.reshape(cube_params_3_value[0], [n_part_3, 3])
@@ -397,7 +397,7 @@ def main(argv=None):
             f.write('{} {} {}\n'.format(t[j][0], t[j][1], t[j][2]))
         cube_params = np.loadtxt(os.path.join(dump_dir, 'cube_3_{:04d}.txt'.format(it)))
         obj_filename = os.path.join(obj_dir, 'cube_3_{:04d}.obj'.format(it))
-        vis_primitive.save_parts(cube_params, obj_filename)
+        vis_primitive.save_parts(cube_params, obj_filename, level='3')
 
         np.savetxt(os.path.join(dump_dir, 'node_position_{:04d}.txt'.format(it)), node_position_value)
         np.savetxt(os.path.join(dump_dir, 'latent_code_{:04d}.txt'.format(it)), np.reshape(latent_code_value, [-1]))
@@ -434,7 +434,7 @@ def main(argv=None):
                   f.write('{} {} {}\n'.format(t[j][0], t[j][1], t[j][2]))
               cube_params = np.loadtxt(os.path.join(dump_dir, 'cube_1_{:06d}_{:04d}.txt'.format(i, it)))
               obj_filename = os.path.join(obj_dir, 'cube_1_{:06d}_{:04d}.obj'.format(i, it))
-              vis_primitive.save_parts(cube_params, obj_filename)
+              vis_primitive.save_parts(cube_params, obj_filename, level='1')
 
               with open(os.path.join(dump_dir, 'cube_2_{:06d}_{:04d}.txt'.format(i, it)), 'w') as f:
                 z = np.reshape(cube_params_2_value[0], [n_part_2, 3])
@@ -446,7 +446,7 @@ def main(argv=None):
                   f.write('{} {} {}\n'.format(t[j][0], t[j][1], t[j][2]))
               cube_params = np.loadtxt(os.path.join(dump_dir, 'cube_2_{:06d}_{:04d}.txt'.format(i, it)))
               obj_filename = os.path.join(obj_dir, 'cube_2_{:06d}_{:04d}.obj'.format(i, it))
-              vis_primitive.save_parts(cube_params, obj_filename)
+              vis_primitive.save_parts(cube_params, obj_filename, level='2')
 
               with open(os.path.join(dump_dir, 'cube_3_{:06d}_{:04d}.txt'.format(i, it)), 'w') as f:
                 z = np.reshape(cube_params_3_value[0], [n_part_3, 3])
@@ -458,7 +458,7 @@ def main(argv=None):
                   f.write('{} {} {}\n'.format(t[j][0], t[j][1], t[j][2]))
               cube_params = np.loadtxt(os.path.join(dump_dir, 'cube_3_{:06d}_{:04d}.txt'.format(i, it)))
               obj_filename = os.path.join(obj_dir, 'cube_3_{:06d}_{:04d}.obj'.format(i, it))
-              vis_primitive.save_parts(cube_params, obj_filename)
+              vis_primitive.save_parts(cube_params, obj_filename, level='3')
 
               pc_filename = os.path.join(obj_dir, 'pc_{:06d}_{:04d}.obj'.format(i, it))
               vis_pointcloud.save_points(np.transpose(node_position_value),
