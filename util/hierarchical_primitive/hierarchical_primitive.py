@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import json
 
 from hierarchical_primitive import assemble_obj
 from hierarchical_primitive import cube_inclusion
@@ -205,7 +206,38 @@ def correct_choose_flag(choose_flag, cube_param_0, cube_param_1, cube_param_2, v
         choose_flag[0][flag_0_index] = 0
 
   if verbose: print('choose_flag:', choose_flag)
-  return choose_flag
+  return choose_flag, index_relation_01, index_relation_12
+
+
+def save_tree_structure(choose_flag, index_relation_01, index_relation_12, save_filename):
+  # get lift up flag.  0: not selected  1: leaf node  2: non-leaf node
+  level_3_flag = choose_flag[0]
+  level_2_flag = choose_flag[1]
+  level_1_flag = choose_flag[2]
+  for i in range(len(level_3_flag)):
+    if level_3_flag[i] != 0:
+      level_2_flag[index_relation_01[i]] = 2
+  for i in range(len(level_2_flag)):
+    if level_2_flag[i] != 0:
+      level_1_flag[index_relation_12[i]] = 2
+
+  tree = {'id': 0, 'level': 0, 'children': []}
+  for i in range(len(level_1_flag)):
+    if level_1_flag[i] != 0:
+      node = {'id': i, 'level': 1, 'parent': 0, 'children':[]}
+      tree['children'].append(node)
+      if level_1_flag[i] == 2:
+        for j in range(len(level_2_flag)):
+          if index_relation_12[j] == i and level_2_flag[j] != 0:
+            node = {'id': j, 'level': 2, 'parent': i, 'children':[]}
+            tree['children'][-1]['children'].append(node)
+            if level_2_flag[j] == 2:
+              for k in range(len(level_3_flag)):
+                if index_relation_01[k] == j and level_3_flag[k] == 1:
+                  node = {'id': k, 'level': 3, 'parent': j, 'children':[]}
+                  tree['children'][-1]['children'][-1]['children'].append(node)
+  with open(save_filename, 'w') as f:
+    json.dump(tree, f, indent=2)
 
 
 def vis_assembly_cube(cube_file_dir, cube_file_name, choose_flag_dir, choose_flag_name, des_dir, choose_flag_prefix=None, with_correction=False, verbose=False):
@@ -224,10 +256,13 @@ def vis_assembly_cube(cube_file_dir, cube_file_name, choose_flag_dir, choose_fla
   if verbose: print('choose_flag:\n', choose_flag)
   hp.assemble_obj(os.path.join(des_dir, 'tmp'), des_dir, '{}_assembly_cube_{}'.format(choose_flag_prefix, cube_file_name), choose_flag, verbose=verbose)
   if with_correction:
-    choose_flag = correct_choose_flag(choose_flag,
-                                      hp.level_cube_param[0]['cube_param'],
-                                      hp.level_cube_param[1]['cube_param'],
-                                      hp.level_cube_param[2]['cube_param'],
-                                      verbose=verbose)
+    [choose_flag, index_relation_01, index_relation_12] = \
+        correct_choose_flag(
+            choose_flag,
+            hp.level_cube_param[0]['cube_param'],
+            hp.level_cube_param[1]['cube_param'],
+            hp.level_cube_param[2]['cube_param'],
+            verbose=verbose)
     choose_flag_prefix += '_correction'
     hp.assemble_obj(os.path.join(des_dir, 'tmp'), des_dir, '{}_assembly_cube_{}'.format(choose_flag_prefix, cube_file_name), choose_flag, verbose=verbose)
+    save_tree_structure(choose_flag, index_relation_01, index_relation_12, save_filename=os.path.join(des_dir, '{}_assembly_cube_{}.json'.format(choose_flag_prefix, cube_file_name)))
