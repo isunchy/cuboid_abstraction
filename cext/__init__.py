@@ -14,34 +14,32 @@ octree_conv_grad = _primitive_gen_module.octree_conv_grad
 octree_pooling_grad = _primitive_gen_module.octree_pooling_grad
 
 # primitive ops
-primitive_mutex_loss_v3 = _primitive_gen_module.primitive_mutex_loss_v3
-primitive_group_points_v3 = _primitive_gen_module.primitive_group_points_v3
-primitive_cube_coverage_loss_v3 = _primitive_gen_module.primitive_cube_coverage_loss_v3
-primitive_coverage_loss_v2 = _primitive_gen_module.primitive_coverage_loss_v2
-primitive_consistency_loss_v2 = _primitive_gen_module.primitive_consistency_loss_v2
-primitive_symmetry_loss_v3 = _primitive_gen_module.primitive_symmetry_loss_v3
-primitive_aligning_loss_v2 = _primitive_gen_module.primitive_aligning_loss_v2
-primitive_cube_volume_v2 = _primitive_gen_module.primitive_cube_volume_v2
+primitive_mutex_loss = _primitive_gen_module.primitive_mutex_loss
+primitive_group_points = _primitive_gen_module.primitive_group_points
+primitive_cube_coverage_loss = _primitive_gen_module.primitive_cube_coverage_loss
+primitive_coverage_loss = _primitive_gen_module.primitive_coverage_loss
+primitive_consistency_loss = _primitive_gen_module.primitive_consistency_loss
+primitive_symmetry_loss = _primitive_gen_module.primitive_symmetry_loss
+primitive_aligning_loss = _primitive_gen_module.primitive_aligning_loss
+primitive_cube_volume = _primitive_gen_module.primitive_cube_volume
 primitive_cube_area_average_loss = _primitive_gen_module.primitive_cube_area_average_loss
 primitive_points_suffix_index = _primitive_gen_module.primitive_points_suffix_index
 
-primitive_mutex_loss_v3_grad = _primitive_gen_module.primitive_mutex_loss_v3_grad
-primitive_cube_coverage_loss_v3_grad = _primitive_gen_module.primitive_cube_coverage_loss_v3_grad
-primitive_coverage_loss_v2_grad = _primitive_gen_module.primitive_coverage_loss_v2_grad
-primitive_consistency_loss_v2_grad = _primitive_gen_module.primitive_consistency_loss_v2_grad
-primitive_symmetry_loss_v3_grad = _primitive_gen_module.primitive_symmetry_loss_v3_grad
-primitive_aligning_loss_v2_grad = _primitive_gen_module.primitive_aligning_loss_v2_grad
+primitive_mutex_loss_grad = _primitive_gen_module.primitive_mutex_loss_grad
+primitive_cube_coverage_loss_grad = _primitive_gen_module.primitive_cube_coverage_loss_grad
+primitive_coverage_loss_grad = _primitive_gen_module.primitive_coverage_loss_grad
+primitive_consistency_loss_grad = _primitive_gen_module.primitive_consistency_loss_grad
+primitive_symmetry_loss_grad = _primitive_gen_module.primitive_symmetry_loss_grad
+primitive_aligning_loss_grad = _primitive_gen_module.primitive_aligning_loss_grad
 primitive_cube_area_average_loss_grad = _primitive_gen_module.primitive_cube_area_average_loss_grad
 
 # mask prediction
-primitive_coverage_split_loss_v3 = _primitive_gen_module.primitive_coverage_split_loss_v3
+primitive_coverage_split_loss = _primitive_gen_module.primitive_coverage_split_loss
 primitive_consistency_split_loss = _primitive_gen_module.primitive_consistency_split_loss
 primitive_tree_generation = _primitive_gen_module.primitive_tree_generation
-primitive_cube_coverage_loss_v4 = _primitive_gen_module.primitive_cube_coverage_loss_v4
 
-primitive_coverage_split_loss_v3_grad = _primitive_gen_module.primitive_coverage_split_loss_v3_grad
+primitive_coverage_split_loss_grad = _primitive_gen_module.primitive_coverage_split_loss_grad
 primitive_consistency_split_loss_grad = _primitive_gen_module.primitive_consistency_split_loss_grad
-primitive_cube_coverage_loss_v4_grad = _primitive_gen_module.primitive_cube_coverage_loss_v4_grad
 
 # cube update
 primitive_coverage_select_loss = _primitive_gen_module.primitive_coverage_select_loss
@@ -54,8 +52,8 @@ primitive_mutex_select_loss_grad = _primitive_gen_module.primitive_mutex_select_
 
 
 ops.NotDifferentiable('OctreeDatabase')
-ops.NotDifferentiable('PtimitiveGroupPointsV3')
-ops.NotDifferentiable('PrimitiveCubeVolumeV2')
+ops.NotDifferentiable('PtimitiveGroupPoints')
+ops.NotDifferentiable('PrimitiveCubeVolume')
 ops.NotDifferentiable('PrimitivePointsSuffixIndex')
 ops.NotDifferentiable('PrimitiveTreeGeneration')
 
@@ -83,30 +81,18 @@ def _OctreePoolingGrad(op, *grad):
           None]
 
 
-@ops.RegisterGradient('PrimitiveMutexLossV3')
-def _PrimitiveMutexLossV3Grad(op, grad):
-  return primitive_mutex_loss_v3_grad(grad,
-                                      op.inputs[0],
-                                      op.inputs[1],
-                                      op.inputs[2],
-                                      op.get_attr('scale'))
+@ops.RegisterGradient('PrimitiveMutexLoss')
+def _PrimitiveMutexLossGrad(op, grad):
+  return primitive_mutex_loss_grad(grad,
+                                   op.inputs[0],
+                                   op.inputs[1],
+                                   op.inputs[2],
+                                   op.get_attr('scale'))
 
 
-@ops.RegisterGradient('PrimitiveCubeCoverageLossV3')
-def _PrimitiveCubeCoverageLossV3Grad(op, grad):
-  return primitive_cube_coverage_loss_v3_grad(grad,
-                                              op.inputs[0],
-                                              op.inputs[1],
-                                              op.inputs[2],
-                                              op.inputs[3],
-                                              op.inputs[4],
-                                              op.get_attr('n_src_cube')) + \
-         (None, None)
-
-
-@ops.RegisterGradient('PrimitiveCoverageLossV2')
-def _PrimitiveCoverageLossV2Grad(op, grad):
-  return primitive_coverage_loss_v2_grad(grad,
+@ops.RegisterGradient('PrimitiveCoverageLoss')
+def _PrimitiveCoverageLossGrad(op, grad):
+  return primitive_coverage_loss_grad(grad,
                                          op.inputs[0],
                                          op.inputs[1],
                                          op.inputs[2],
@@ -114,33 +100,33 @@ def _PrimitiveCoverageLossV2Grad(op, grad):
          (None,)
 
 
-@ops.RegisterGradient('PrimitiveConsistencyLossV2')
-def _PrimitiveConsistencyV2LossGrad(op, grad):
-  return primitive_consistency_loss_v2_grad(grad,
-                                            op.inputs[0],
-                                            op.inputs[1],
-                                            op.inputs[2],
-                                            op.inputs[3],
-                                            op.get_attr('scale'),
-                                            op.get_attr('num_sample')) + \
-         (None,)
-
-
-@ops.RegisterGradient('PrimitiveSymmetryLossV3')
-def _PrimitiveSymmetryLossV3Grad(op, grad):
-  return primitive_symmetry_loss_v3_grad(grad,
+@ops.RegisterGradient('PrimitiveConsistencyLoss')
+def _PrimitiveConsistencyLossGrad(op, grad):
+  return primitive_consistency_loss_grad(grad,
                                          op.inputs[0],
                                          op.inputs[1],
                                          op.inputs[2],
+                                         op.inputs[3],
                                          op.get_attr('scale'),
-                                         op.get_attr('depth'))
+                                         op.get_attr('num_sample')) + \
+         (None,)
 
 
-@ops.RegisterGradient('PrimitiveAligningLossV2')
-def _PrimitiveligningLossV2Grad(op, grad):
-  return [primitive_aligning_loss_v2_grad(grad,
-                                          op.inputs[0],
-                                          op.inputs[1]),
+@ops.RegisterGradient('PrimitiveSymmetryLoss')
+def _PrimitiveSymmetryLossGrad(op, grad):
+  return primitive_symmetry_loss_grad(grad,
+                                      op.inputs[0],
+                                      op.inputs[1],
+                                      op.inputs[2],
+                                      op.get_attr('scale'),
+                                      op.get_attr('depth'))
+
+
+@ops.RegisterGradient('PrimitiveAligningLoss')
+def _PrimitiveligningLossGrad(op, grad):
+  return [primitive_aligning_loss_grad(grad,
+                                       op.inputs[0],
+                                       op.inputs[1]),
           None]
 
 
@@ -149,9 +135,9 @@ def _PrimitiveCubeAreaAverageLossGrad(op, grad):
   return primitive_cube_area_average_loss_grad(grad,
                                                op.inputs[0])
 
-@ops.RegisterGradient('PrimitiveCoverageSplitLossV3')
-def _PrimitiveCoverageSplitLossV3Grad(op, *grad):
-  return primitive_coverage_split_loss_v3_grad(grad[0],
+@ops.RegisterGradient('PrimitiveCoverageSplitLoss')
+def _PrimitiveCoverageSplitLossGrad(op, *grad):
+  return primitive_coverage_split_loss_grad(grad[0],
                                             op.inputs[0],
                                             op.inputs[1],
                                             op.inputs[2],
@@ -169,15 +155,15 @@ def _PrimitiveConsistencySplitLossGrad(op, grad):
                                                op.get_attr('num_sample')) + \
          (None,)
 
-@ops.RegisterGradient('PrimitiveCubeCoverageLossV4')
-def _PrimitiveCubeCoverageLossV4Grad(op, *grad):
-  return primitive_cube_coverage_loss_v4_grad(grad[0],
-                                              op.inputs[0],
-                                              op.inputs[1],
-                                              op.inputs[2],
-                                              op.inputs[3],
-                                              op.inputs[4],
-                                              op.get_attr('n_src_cube')) + \
+@ops.RegisterGradient('PrimitiveCubeCoverageLoss')
+def _PrimitiveCubeCoverageLossGrad(op, *grad):
+  return primitive_cube_coverage_loss_grad(grad[0],
+                                           op.inputs[0],
+                                           op.inputs[1],
+                                           op.inputs[2],
+                                           op.inputs[3],
+                                           op.inputs[4],
+                                           op.get_attr('n_src_cube')) + \
          (None, None)
 
 @ops.RegisterGradient("PrimitiveMutexSelectLoss")

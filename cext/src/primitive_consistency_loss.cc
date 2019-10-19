@@ -5,37 +5,40 @@
 
 namespace tensorflow {
 
-void compute_symmetry_loss_v3(OpKernelContext* context, const int n_cube,
-    const int batch_size, const int depth, const float scale,
-    const float* in_z, const float* in_q, const float* in_t, float* loss_ptr);
+void compute_consistency_loss(OpKernelContext* context, const int n_cube,
+    const int n_point, const int batch_size, const float num_sample,
+    const float scale, const float* in_z, const float* in_q, const float* in_t,
+    const float* in_pos, float* loss_ptr);
 
-void compute_symmetry_loss_v3_grad(OpKernelContext* context, const int n_cube,
-    const int batch_size, const int depth, const float scale,
-    const float* loss, const float* in_z, const float* in_q, const float* in_t,
-    float* grad_z, float* grad_q, float* grad_t);
+void compute_consistency_loss_grad(OpKernelContext* context, const int n_cube,
+    const int n_point, const int batch_size, const float num_sample,
+    const float scale, const float* loss, const float* in_z, const float* in_q,
+    const float* in_t, const float* in_pos, float* grad_z, float* grad_q,
+    float* grad_t);
 
-REGISTER_OP("PrimitiveSymmetryLossV3")
+REGISTER_OP("PrimitiveConsistencyLoss")
 .Input("in_z: float")
 .Input("in_q: float")
 .Input("in_t: float")
+.Input("in_pos: float")
 .Attr("scale: float = 0.9")
-.Attr("depth: int = 5")
+.Attr("num_sample: int = 26")
 .Output("out_loss: float")
 .SetShapeFn([](shape_inference::InferenceContext* c) {
   c->set_output(0, c->MakeShape({1}));
   return Status::OK();
 })
 .Doc(R"doc(
-Sample points in cube volume, flip them along symmetry plane. The group of 
-point cloud sampled on one cube should be covered by one cube (maybe itself).
+Compute the distance of the point sampled on the cube with their nearest point
+in the point cloud.
 )doc");
 
-class PrimitiveSymmetryLossV3Op : public OpKernel {
+class PrimitiveConsistencyLossOp : public OpKernel {
  public:
-  explicit PrimitiveSymmetryLossV3Op(OpKernelConstruction* context)
+  explicit PrimitiveConsistencyLossOp(OpKernelConstruction* context)
       : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("scale", &scale_));
-    OP_REQUIRES_OK(context, context->GetAttr("depth", &depth_));
+    OP_REQUIRES_OK(context, context->GetAttr("num_sample", &num_sample_));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -57,35 +60,46 @@ class PrimitiveSymmetryLossV3Op : public OpKernel {
     CHECK_EQ(in_t.dim_size(0), batch_size_);
     CHECK_EQ(in_t.dim_size(1), n_cube_ * 3);
 
+    // in_pos [4, n_point]
+    const Tensor& in_pos = context->input(3);
+    auto in_pos_ptr = in_pos.flat<float>().data();
+    CHECK_EQ(in_pos.dim_size(0), 4);
+    n_point_ = in_pos.dim_size(1);
+
     // out loss
     Tensor* out_loss = nullptr;
     TensorShape out_loss_shape({1});
     OP_REQUIRES_OK(context, context->allocate_output("out_loss",
                                 out_loss_shape, &out_loss));
     auto out_loss_ptr = out_loss->flat<float>().data();
-  
-    // compute symmetry loss
-    compute_symmetry_loss_v3(context, n_cube_, batch_size_, depth_, scale_,
-        in_z_ptr, in_q_ptr, in_t_ptr, out_loss_ptr);
+
+    CHECK(num_sample_ == 8 || num_sample_ == 26 || num_sample_ == 96);
+
+    // compute consistency loss
+    compute_consistency_loss(context, n_cube_, n_point_, batch_size_,
+        num_sample_, scale_, in_z_ptr, in_q_ptr, in_t_ptr, in_pos_ptr,
+        out_loss_ptr);
   }
 
  private:
   int n_cube_;
+  int n_point_;
   int batch_size_;
-  int depth_;  // octree node depth, for computing symmetry plane location
+  int num_sample_;
   float scale_;  // scale of sampled points inside cube
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveSymmetryLossV3").Device(DEVICE_GPU),
-    PrimitiveSymmetryLossV3Op);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveConsistencyLoss").Device(DEVICE_GPU),
+    PrimitiveConsistencyLossOp);
 
 
-REGISTER_OP("PrimitiveSymmetryLossV3Grad")
+REGISTER_OP("PrimitiveConsistencyLossGrad")
 .Input("gradient: float")
 .Input("in_z: float")
 .Input("in_q: float")
 .Input("in_t: float")
+.Input("in_pos: float")
 .Attr("scale: float")
-.Attr("depth: int")
+.Attr("num_sample: int")
 .Output("grad_z: float")
 .Output("grad_q: float")
 .Output("grad_t: float")
@@ -96,15 +110,15 @@ REGISTER_OP("PrimitiveSymmetryLossV3Grad")
   return Status::OK();
 })
 .Doc(R"doc(
-Gradient for primitive symmetry loss;
+Gradient for the primitive consistency loss.
 )doc");
 
-class PrimitiveSymmetryLossV3GradOp : public OpKernel {
+class PrimitiveConsistencyLossGradOp : public OpKernel {
  public:
-  explicit PrimitiveSymmetryLossV3GradOp(OpKernelConstruction* context)
+  explicit PrimitiveConsistencyLossGradOp(OpKernelConstruction* context)
       : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("scale", &scale_));
-    OP_REQUIRES_OK(context, context->GetAttr("depth", &depth_));
+    OP_REQUIRES_OK(context, context->GetAttr("num_sample", &num_sample_));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -130,6 +144,13 @@ class PrimitiveSymmetryLossV3GradOp : public OpKernel {
     CHECK_EQ(in_t.dim_size(0), batch_size_);
     CHECK_EQ(in_t.dim_size(1), n_cube_ * 3);
 
+    // in_pos [4, n_point]
+    const Tensor& in_pos = context->input(4);
+    auto in_pos_ptr = in_pos.flat<float>().data();
+    CHECK_EQ(in_pos.dim_size(0), 4);
+    n_point_ = in_pos.dim_size(1);
+
+    CHECK(num_sample_ == 8 || num_sample_ == 26 || num_sample_ == 96);
 
     // grad_z
     Tensor* grad_z = nullptr;
@@ -152,19 +173,20 @@ class PrimitiveSymmetryLossV3GradOp : public OpKernel {
                                 grad_t_shape, &grad_t));
     auto grad_t_ptr = grad_t->flat<float>().data();
 
-    // compute symmetry loss gradient
-    compute_symmetry_loss_v3_grad(context, n_cube_, batch_size_, depth_,
-        scale_, gradients_ptr, in_z_ptr, in_q_ptr, in_t_ptr, grad_z_ptr,
-        grad_q_ptr, grad_t_ptr);
+    // compute consistency loss gradient
+    compute_consistency_loss_grad(context, n_cube_, n_point_, batch_size_,
+        num_sample_, scale_, gradients_ptr, in_z_ptr, in_q_ptr, in_t_ptr,
+        in_pos_ptr, grad_z_ptr, grad_q_ptr, grad_t_ptr);    
   }
 
  private:
   int n_cube_;
+  int n_point_;
   int batch_size_;
-  int depth_;
+  int num_sample_;
   float scale_;  // scale of sampled points inside cube
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveSymmetryLossV3Grad").Device(DEVICE_GPU),
-    PrimitiveSymmetryLossV3GradOp);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveConsistencyLossGrad").Device(DEVICE_GPU),
+    PrimitiveConsistencyLossGradOp);
 
 }  // namespace tensorflow

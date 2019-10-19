@@ -162,7 +162,7 @@ static __global__ void fill_grad_wrt_q(const int nthreads, const int n_cube,
   }
 }
 
-void compute_aligning_loss_v2(OpKernelContext* context, const int n_cube,
+void compute_aligning_loss(OpKernelContext* context, const int n_cube,
     const int batch_size, const float* in_q, const float* in_dir,
     float* loss_ptr) {
   // get GPU device
@@ -183,7 +183,7 @@ void compute_aligning_loss_v2(OpKernelContext* context, const int n_cube,
           nthreads, n_cube, batch_size, in_dir, in_q, loss_ptr);  
 }
 
-void compute_aligning_loss_grad_v2(OpKernelContext* context, const int n_cube,
+void compute_aligning_loss_grad(OpKernelContext* context, const int n_cube,
     const int batch_size, const float* loss, const float* in_q,
     const float* in_dir, float* grad_q) {
   // get GPU device

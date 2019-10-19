@@ -8,7 +8,7 @@ from tensorflow.python.platform import test
 from tensorflow.python.ops import gradient_checker
 
 sys.path.append('../..')
-from cext import primitive_aligning_loss_v2
+from cext import primitive_aligning_loss
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -20,7 +20,7 @@ class PrimitiveAligningLossTest(test.TestCase):
     with self.test_session() as sess:
       q = constant_op.constant(in_q)
       direction = constant_op.constant(in_dir)
-      data_out = primitive_aligning_loss_v2(q, direction)
+      data_out = primitive_aligning_loss(q, direction)
       actual = sess.run(data_out)
     self.assertAllClose(expected, actual.flatten(), atol=1e-6)
 
@@ -28,7 +28,7 @@ class PrimitiveAligningLossTest(test.TestCase):
     with self.test_session() as sess:
       q = constant_op.constant(in_q, shape=[batch_size, 4*n_cube])
       direction = constant_op.constant(in_dir)
-      data_out = primitive_aligning_loss_v2(q, direction)
+      data_out = primitive_aligning_loss(q, direction)
       ret = gradient_checker.compute_gradient(
           q,
           [batch_size, 4*n_cube],

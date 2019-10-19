@@ -5,40 +5,35 @@
 
 namespace tensorflow {
 
-void compute_consistency_loss_v2(OpKernelContext* context, const int n_cube,
-    const int n_point, const int batch_size, const float num_sample,
-    const float scale, const float* in_z, const float* in_q, const float* in_t,
-    const float* in_pos, float* loss_ptr);
+void compute_mutex_loss(OpKernelContext* context, const int n_cube,
+    const int batch_size, const float scale, const float* in_z,
+    const float* in_q, const float* in_t, float* loss_ptr);
 
-void compute_consistency_loss_v2_grad(OpKernelContext* context,
-    const int n_cube, const int n_point, const int batch_size,
-    const float num_sample, const float scale, const float* loss,
-    const float* in_z, const float* in_q, const float* in_t,
-    const float* in_pos, float* grad_z, float* grad_q, float* grad_t);
+void compute_mutex_loss_grad(OpKernelContext* context, const int n_cube,
+    const int batch_size, const float scale, const float* loss,
+    const float* in_z, const float* in_q, const float* in_t, float* grad_z,
+    float* grad_q, float* grad_t);
 
-REGISTER_OP("PrimitiveConsistencyLossV2")
+REGISTER_OP("PrimitiveMutexLoss")
 .Input("in_z: float")
 .Input("in_q: float")
 .Input("in_t: float")
-.Input("in_pos: float")
 .Attr("scale: float = 0.9")
-.Attr("num_sample: int = 26")
 .Output("out_loss: float")
 .SetShapeFn([](shape_inference::InferenceContext* c) {
   c->set_output(0, c->MakeShape({1}));
   return Status::OK();
 })
 .Doc(R"doc(
-Compute the distance of point sampled on cube with their nearest point in point
-cloud.
+Sample points in the cube volume, and compute the distance of each point invades
+the other cubes.
 )doc");
 
-class PrimitiveConsistencyLossV2Op : public OpKernel {
+class PrimitiveMutexLossOp : public OpKernel {
  public:
-  explicit PrimitiveConsistencyLossV2Op(OpKernelConstruction* context)
+  explicit PrimitiveMutexLossOp(OpKernelConstruction* context)
       : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("scale", &scale_));
-    OP_REQUIRES_OK(context, context->GetAttr("num_sample", &num_sample_));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -60,46 +55,33 @@ class PrimitiveConsistencyLossV2Op : public OpKernel {
     CHECK_EQ(in_t.dim_size(0), batch_size_);
     CHECK_EQ(in_t.dim_size(1), n_cube_ * 3);
 
-    // in_pos [4, n_point]
-    const Tensor& in_pos = context->input(3);
-    auto in_pos_ptr = in_pos.flat<float>().data();
-    CHECK_EQ(in_pos.dim_size(0), 4);
-    n_point_ = in_pos.dim_size(1);
-
     // out loss
     Tensor* out_loss = nullptr;
     TensorShape out_loss_shape({1});
     OP_REQUIRES_OK(context, context->allocate_output("out_loss",
                                 out_loss_shape, &out_loss));
     auto out_loss_ptr = out_loss->flat<float>().data();
-
-    CHECK(num_sample_ == 8 || num_sample_ == 26 || num_sample_ == 96);
-
-    // compute consistency loss
-    compute_consistency_loss_v2(context, n_cube_, n_point_, batch_size_,
-        num_sample_, scale_, in_z_ptr, in_q_ptr, in_t_ptr, in_pos_ptr,
-        out_loss_ptr);
+    
+    // compute mutex loss
+    compute_mutex_loss(context, n_cube_, batch_size_, scale_, in_z_ptr,
+        in_q_ptr, in_t_ptr, out_loss_ptr);
   }
 
  private:
   int n_cube_;
-  int n_point_;
   int batch_size_;
-  int num_sample_;
-  float scale_;  // scale of sampled points inside cube
+  float scale_;
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveConsistencyLossV2").Device(DEVICE_GPU),
-    PrimitiveConsistencyLossV2Op);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveMutexLoss").Device(DEVICE_GPU),
+    PrimitiveMutexLossOp);
 
 
-REGISTER_OP("PrimitiveConsistencyLossV2Grad")
+REGISTER_OP("PrimitiveMutexLossGrad")
 .Input("gradient: float")
 .Input("in_z: float")
 .Input("in_q: float")
 .Input("in_t: float")
-.Input("in_pos: float")
 .Attr("scale: float")
-.Attr("num_sample: int")
 .Output("grad_z: float")
 .Output("grad_q: float")
 .Output("grad_t: float")
@@ -110,15 +92,14 @@ REGISTER_OP("PrimitiveConsistencyLossV2Grad")
   return Status::OK();
 })
 .Doc(R"doc(
-Gradient for primitive consistency loss;
+Gradient for the primitive mutex loss.
 )doc");
 
-class PrimitiveConsistencyLossV2GradOp : public OpKernel {
+class PrimitiveMutexLossGradOp : public OpKernel {
  public:
-  explicit PrimitiveConsistencyLossV2GradOp(OpKernelConstruction* context)
+  explicit PrimitiveMutexLossGradOp(OpKernelConstruction* context)
       : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("scale", &scale_));
-    OP_REQUIRES_OK(context, context->GetAttr("num_sample", &num_sample_));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -144,14 +125,6 @@ class PrimitiveConsistencyLossV2GradOp : public OpKernel {
     CHECK_EQ(in_t.dim_size(0), batch_size_);
     CHECK_EQ(in_t.dim_size(1), n_cube_ * 3);
 
-    // in_pos [4, n_point]
-    const Tensor& in_pos = context->input(4);
-    auto in_pos_ptr = in_pos.flat<float>().data();
-    CHECK_EQ(in_pos.dim_size(0), 4);
-    n_point_ = in_pos.dim_size(1);
-
-    CHECK(num_sample_ == 8 || num_sample_ == 26 || num_sample_ == 96);
-
     // grad_z
     Tensor* grad_z = nullptr;
     TensorShape grad_z_shape = in_z.shape();
@@ -173,20 +146,18 @@ class PrimitiveConsistencyLossV2GradOp : public OpKernel {
                                 grad_t_shape, &grad_t));
     auto grad_t_ptr = grad_t->flat<float>().data();
 
-    // compute consistency loss gradient
-    compute_consistency_loss_v2_grad(context, n_cube_, n_point_, batch_size_,
-        num_sample_, scale_, gradients_ptr, in_z_ptr, in_q_ptr, in_t_ptr,
-        in_pos_ptr, grad_z_ptr, grad_q_ptr, grad_t_ptr);    
+    // compute mutex loss gradient
+    compute_mutex_loss_grad(context, n_cube_, batch_size_, scale_,
+        gradients_ptr, in_z_ptr, in_q_ptr, in_t_ptr, grad_z_ptr, grad_q_ptr,
+        grad_t_ptr);
   }
 
  private:
   int n_cube_;
-  int n_point_;
   int batch_size_;
-  int num_sample_;
-  float scale_;  // scale of sampled points inside cube
+  float scale_;
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveConsistencyLossV2Grad").Device(DEVICE_GPU),
-    PrimitiveConsistencyLossV2GradOp);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveMutexLossGrad").Device(DEVICE_GPU),
+    PrimitiveMutexLossGradOp);
 
-}  // namespace tensorflow
+}  //namespace tensorflow

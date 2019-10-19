@@ -8,8 +8,8 @@ from tensorflow.python.platform import test
 from tensorflow.python.ops import gradient_checker
 
 sys.path.append('../..')
-from cext import primitive_cube_coverage_loss_v4
-from cext import primitive_group_points_v3
+from cext import primitive_cube_coverage_loss
+from cext import primitive_group_points
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -27,8 +27,8 @@ class PrimitiveCubeCoverageLossTest(test.TestCase):
       dq = constant_op.constant(des_q)
       dt = constant_op.constant(des_t)
       pos = constant_op.constant(in_pos)
-      points_index = primitive_group_points_v3(sz, sq, st, pos)
-      data_out, relation_out = primitive_cube_coverage_loss_v4(dz, dq, dt, pos, points_index,
+      points_index = primitive_group_points(sz, sq, st, pos)
+      data_out, relation_out = primitive_cube_coverage_loss(dz, dq, dt, pos, points_index,
           n_src_cube=n_src_cube)
       [actual, pi, relation] = sess.run([data_out, points_index, relation_out])
       # print('\npoints_index: ', pi)
@@ -46,8 +46,8 @@ class PrimitiveCubeCoverageLossTest(test.TestCase):
       dq = constant_op.constant(des_q, shape=[batch_size, 4*n_des_cube])
       dt = constant_op.constant(des_t, shape=[batch_size, 3*n_des_cube])
       pos = constant_op.constant(in_pos)
-      points_index = primitive_group_points_v3(sz, sq, st, pos)
-      data_out, _ = primitive_cube_coverage_loss_v4(dz, dq, dt, pos, points_index,
+      points_index = primitive_group_points(sz, sq, st, pos)
+      data_out, _ = primitive_cube_coverage_loss(dz, dq, dt, pos, points_index,
           n_src_cube=n_src_cube)
       ret = gradient_checker.compute_gradient(
           [dz, dq, dt],

@@ -7,7 +7,7 @@ from tensorflow.python.framework import constant_op
 from tensorflow.python.platform import test
 
 sys.path.append('../..')
-from cext import primitive_group_points_v3
+from cext import primitive_group_points
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -21,7 +21,7 @@ class PrimitiveGroupPointsTest(test.TestCase):
       q = constant_op.constant(in_q)
       t = constant_op.constant(in_t)
       pos = constant_op.constant(in_pos)
-      data_out = primitive_group_points_v3(z, q, t, pos)
+      data_out = primitive_group_points(z, q, t, pos)
       actual = sess.run(data_out)
     self.assertAllEqual(expected, actual.flatten())
 

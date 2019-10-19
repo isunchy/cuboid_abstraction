@@ -8,7 +8,7 @@ from tensorflow.python.platform import test
 from tensorflow.python.ops import gradient_checker
 
 sys.path.append('../..')
-from cext import primitive_mutex_loss_v3
+from cext import primitive_mutex_loss
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -20,7 +20,7 @@ class PrimitiveMutexLossTest(test.TestCase):
       z = constant_op.constant(in_z)
       q = constant_op.constant(in_q)
       t = constant_op.constant(in_t)
-      data_out = primitive_mutex_loss_v3(z, q, t, scale=scale)
+      data_out = primitive_mutex_loss(z, q, t, scale=scale)
       actual = sess.run(data_out)
     self.assertAllClose(expected, actual.flatten(), atol=1e-6)
 
@@ -29,7 +29,7 @@ class PrimitiveMutexLossTest(test.TestCase):
       z = constant_op.constant(in_z, shape=[batch_size, 3*n_cube])
       q = constant_op.constant(in_q, shape=[batch_size, 4*n_cube])
       t = constant_op.constant(in_t, shape=[batch_size, 3*n_cube])
-      data_out = primitive_mutex_loss_v3(z, q, t, scale=scale)
+      data_out = primitive_mutex_loss(z, q, t, scale=scale)
       ret = gradient_checker.compute_gradient(
           [z, q, t],
          [[batch_size, 3*n_cube], [batch_size, 4*n_cube], [batch_size, 3*n_cube]],

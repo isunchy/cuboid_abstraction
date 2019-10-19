@@ -426,7 +426,7 @@ static std::vector<float> cube_volume_points_host {
   -1.0,  0.0,  1.0, -1.0,  0.0,  1.0, -1.0,  0.0,  1.0, -1.0,  0.0,  1.0, -1.0,  0.0,  1.0, -1.0,  0.0,  1.0, -1.0,  0.0,  1.0, -1.0,  0.0,  1.0, -1.0,  0.0,  1.0,
 };
 
-void compute_symmetry_loss_v3(OpKernelContext* context, const int n_cube,
+void compute_symmetry_loss(OpKernelContext* context, const int n_cube,
     const int batch_size, const int depth, const float scale,
     const float* in_z, const float* in_q, const float* in_t, float* loss_ptr) {
   // get GPU device
@@ -527,7 +527,7 @@ void compute_symmetry_loss_v3(OpKernelContext* context, const int n_cube,
 }
 
 
-void compute_symmetry_loss_v3_grad(OpKernelContext* context, const int n_cube,
+void compute_symmetry_loss_grad(OpKernelContext* context, const int n_cube,
     const int batch_size, const int depth, const float scale,
     const float* loss, const float* in_z, const float* in_q, const float* in_t,
     float* grad_z, float* grad_q, float* grad_t) {

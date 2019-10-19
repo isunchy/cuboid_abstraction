@@ -8,7 +8,7 @@ namespace tensorflow {
 void compute_cube_volume(OpKernelContext* context, const int n_cube,
     const int batch_size, const float* in_z, float* out_volume);
 
-REGISTER_OP("PrimitiveCubeVolumeV2")
+REGISTER_OP("PrimitiveCubeVolume")
 .Input("in_z: float")
 .Output("out_volume: float")
 .SetShapeFn([](shape_inference::InferenceContext* c) {
@@ -16,12 +16,12 @@ REGISTER_OP("PrimitiveCubeVolumeV2")
   return Status::OK();
 })
 .Doc(R"doc(
-Compute primitive cube volume.
+Compute the primitive cube volume.
 )doc");
 
-class PrimitiveCubeVolumeV2Op : public OpKernel {
+class PrimitiveCubeVolumeOp : public OpKernel {
 public:
-  explicit PrimitiveCubeVolumeV2Op(OpKernelConstruction* context)
+  explicit PrimitiveCubeVolumeOp(OpKernelConstruction* context)
       : OpKernel(context) {}
 
   void Compute(OpKernelContext* context) override {
@@ -47,7 +47,7 @@ public:
   int n_cube_;
   int batch_size_;
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveCubeVolumeV2").Device(DEVICE_GPU),
-    PrimitiveCubeVolumeV2Op);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveCubeVolume").Device(DEVICE_GPU),
+    PrimitiveCubeVolumeOp);
 
 }  // namespace tensorflow

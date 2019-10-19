@@ -174,9 +174,9 @@ def cube_update_loss_function(logit_1, logit_2, logit_3, cube_params_1,
   with tf.name_scope('cube_update_loss_function'):
     logit = tf.concat([logit_1, logit_2, logit_3], axis=1)
     mask = tf.cast(logit > 0.5, tf.int32)
-    relation_12 = cube_coverage_loss_v6(cube_params_1, cube_params_2, n_part_1,
+    _, _, relation_12 = cube_coverage_loss(cube_params_1, cube_params_2, n_part_1,
         node_position) # [bs, n_part_1]
-    relation_23 = cube_coverage_loss_v6(cube_params_2, cube_params_3, n_part_2,
+    _, _, relation_23 = cube_coverage_loss(cube_params_2, cube_params_3, n_part_2,
         node_position) # [bs, n_part_2]
     mask_1, mask_2, mask_3 = primitive_tree_generation(mask, relation_12,
         relation_23, n_part_1, n_part_2, n_part_3)

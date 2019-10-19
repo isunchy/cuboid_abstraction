@@ -5,34 +5,38 @@
 
 namespace tensorflow {
 
-void compute_coverage_loss_v2(OpKernelContext* context, const int n_cube,
-    const int n_point, const float* in_z, const float* in_q, const float* in_t,
-    const float* in_pos, float* loss_ptr);
+void compute_symmetry_loss(OpKernelContext* context, const int n_cube,
+    const int batch_size, const int depth, const float scale,
+    const float* in_z, const float* in_q, const float* in_t, float* loss_ptr);
 
-void compute_coverage_loss_grad_v2(OpKernelContext* context, const int n_cube,
-    const int n_point, const int batch_size, const float* loss,
-    const float* in_z, const float* in_q, const float* in_t,
-    const float* in_pos, float* grad_z, float* grad_q, float* grad_t);
+void compute_symmetry_loss_grad(OpKernelContext* context, const int n_cube,
+    const int batch_size, const int depth, const float scale,
+    const float* loss, const float* in_z, const float* in_q, const float* in_t,
+    float* grad_z, float* grad_q, float* grad_t);
 
-REGISTER_OP("PrimitiveCoverageLossV2")
+REGISTER_OP("PrimitiveSymmetryLoss")
 .Input("in_z: float")
 .Input("in_q: float")
 .Input("in_t: float")
-.Input("in_pos: float")
+.Attr("scale: float = 0.9")
+.Attr("depth: int = 5")
 .Output("out_loss: float")
 .SetShapeFn([](shape_inference::InferenceContext* c) {
   c->set_output(0, c->MakeShape({1}));
   return Status::OK();
 })
 .Doc(R"doc(
-Compute the distance of every point that located outside all cubes with its
-nearest cube.
+Sample points in cube volume, flip them along symmetry plane. The group of 
+point cloud sampled on one cube should be covered by one cube (maybe itself).
 )doc");
 
-class PrimitiveCoverageLossV2Op : public OpKernel {
+class PrimitiveSymmetryLossOp : public OpKernel {
  public:
-  explicit PrimitiveCoverageLossV2Op(OpKernelConstruction* context)
-      :  OpKernel(context) {}
+  explicit PrimitiveSymmetryLossOp(OpKernelConstruction* context)
+      : OpKernel(context) {
+    OP_REQUIRES_OK(context, context->GetAttr("scale", &scale_));
+    OP_REQUIRES_OK(context, context->GetAttr("depth", &depth_));
+  }
 
   void Compute(OpKernelContext* context) override {
     // in_z [bs, n_cube * 3]
@@ -53,39 +57,35 @@ class PrimitiveCoverageLossV2Op : public OpKernel {
     CHECK_EQ(in_t.dim_size(0), batch_size_);
     CHECK_EQ(in_t.dim_size(1), n_cube_ * 3);
 
-    // in_pos [4, n_point]
-    const Tensor& in_pos = context->input(3);
-    auto in_pos_ptr = in_pos.flat<float>().data();
-    CHECK_EQ(in_pos.dim_size(0), 4);
-    n_point_ = in_pos.dim_size(1);
-
     // out loss
     Tensor* out_loss = nullptr;
     TensorShape out_loss_shape({1});
     OP_REQUIRES_OK(context, context->allocate_output("out_loss",
                                 out_loss_shape, &out_loss));
     auto out_loss_ptr = out_loss->flat<float>().data();
-
-    // compute coverage loss
-    compute_coverage_loss_v2(context, n_cube_, n_point_, in_z_ptr, in_q_ptr,
-        in_t_ptr, in_pos_ptr, out_loss_ptr);
+  
+    // compute symmetry loss
+    compute_symmetry_loss(context, n_cube_, batch_size_, depth_, scale_,
+        in_z_ptr, in_q_ptr, in_t_ptr, out_loss_ptr);
   }
 
  private:
   int n_cube_;
-  int n_point_;  // the sum of batch size point clouds' points
   int batch_size_;
+  int depth_;  // octree node depth, for computing symmetry plane location
+  float scale_;  // scale of sampled points inside cube
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveCoverageLossV2").Device(DEVICE_GPU),
-    PrimitiveCoverageLossV2Op);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveSymmetryLoss").Device(DEVICE_GPU),
+    PrimitiveSymmetryLossOp);
 
 
-REGISTER_OP("PrimitiveCoverageLossV2Grad")
+REGISTER_OP("PrimitiveSymmetryLossGrad")
 .Input("gradient: float")
 .Input("in_z: float")
 .Input("in_q: float")
 .Input("in_t: float")
-.Input("in_pos: float")
+.Attr("scale: float")
+.Attr("depth: int")
 .Output("grad_z: float")
 .Output("grad_q: float")
 .Output("grad_t: float")
@@ -96,13 +96,16 @@ REGISTER_OP("PrimitiveCoverageLossV2Grad")
   return Status::OK();
 })
 .Doc(R"doc(
-Gradient for coverage loss.
+Gradient for the primitive symmetry loss;
 )doc");
 
-class PrimitiveCoverageLossV2GradOp : public OpKernel {
+class PrimitiveSymmetryLossGradOp : public OpKernel {
  public:
-  explicit PrimitiveCoverageLossV2GradOp(OpKernelConstruction* context)
-      : OpKernel(context) {}
+  explicit PrimitiveSymmetryLossGradOp(OpKernelConstruction* context)
+      : OpKernel(context) {
+    OP_REQUIRES_OK(context, context->GetAttr("scale", &scale_));
+    OP_REQUIRES_OK(context, context->GetAttr("depth", &depth_));
+  }
 
   void Compute(OpKernelContext* context) override {
     // in gradients
@@ -127,11 +130,6 @@ class PrimitiveCoverageLossV2GradOp : public OpKernel {
     CHECK_EQ(in_t.dim_size(0), batch_size_);
     CHECK_EQ(in_t.dim_size(1), n_cube_ * 3);
 
-    // in_pos [4, n_point]
-    const Tensor& in_pos = context->input(4);
-    auto in_pos_ptr = in_pos.flat<float>().data();
-    CHECK_EQ(in_pos.dim_size(0), 4);
-    n_point_ = in_pos.dim_size(1);
 
     // grad_z
     Tensor* grad_z = nullptr;
@@ -154,18 +152,19 @@ class PrimitiveCoverageLossV2GradOp : public OpKernel {
                                 grad_t_shape, &grad_t));
     auto grad_t_ptr = grad_t->flat<float>().data();
 
-    // compute coverage loss gradient
-    compute_coverage_loss_grad_v2(context, n_cube_, n_point_, batch_size_,
-        gradients_ptr, in_z_ptr, in_q_ptr, in_t_ptr, in_pos_ptr, grad_z_ptr,
+    // compute symmetry loss gradient
+    compute_symmetry_loss_grad(context, n_cube_, batch_size_, depth_,
+        scale_, gradients_ptr, in_z_ptr, in_q_ptr, in_t_ptr, grad_z_ptr,
         grad_q_ptr, grad_t_ptr);
   }
 
  private:
   int n_cube_;
-  int n_point_;
   int batch_size_;
+  int depth_;
+  float scale_;  // scale of sampled points inside cube
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveCoverageLossV2Grad").Device(DEVICE_GPU),
-    PrimitiveCoverageLossV2GradOp);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveSymmetryLossGrad").Device(DEVICE_GPU),
+    PrimitiveSymmetryLossGradOp);
 
 }  // namespace tensorflow

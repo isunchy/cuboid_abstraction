@@ -306,7 +306,7 @@ static __global__ void fill_grad_wrt_zqt(const int nthreads, const int n_cube,
   }
 }
 
-void compute_coverage_split_loss_v3(OpKernelContext* context, const int batch_size,
+void compute_coverage_split_loss(OpKernelContext* context, const int batch_size,
     const int n_cube, const int n_point, const float* in_z, const float* in_q,
     const float* in_t, const float* in_pos, float* loss_ptr, int* count_ptr) {
   // get GPU device
@@ -353,9 +353,9 @@ void compute_coverage_split_loss_v3(OpKernelContext* context, const int batch_si
           min_distance_cube_index_ptr, loss_ptr);
 }
 
-void compute_coverage_split_loss_v3_grad(OpKernelContext* context, const int n_cube,
-    const int n_point, const int batch_size, const float* loss,
-    const float* in_z, const float* in_q, const float* in_t,
+void compute_coverage_split_loss_grad(OpKernelContext* context,
+    const int n_cube, const int n_point, const int batch_size,
+    const float* loss, const float* in_z, const float* in_q, const float* in_t,
     const float* in_pos, float* grad_z, float* grad_q, float* grad_t) {
   // get GPU device
   GPUDevice d = context->eigen_device<GPUDevice>();

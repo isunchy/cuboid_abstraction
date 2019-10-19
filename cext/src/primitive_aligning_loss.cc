@@ -5,15 +5,15 @@
 
 namespace tensorflow {
 
-void compute_aligning_loss_v2(OpKernelContext* context, const int n_cube,
+void compute_aligning_loss(OpKernelContext* context, const int n_cube,
     const int batch_size, const float* in_q, const float* in_dir,
     float* loss_ptr);
 
-void compute_aligning_loss_grad_v2(OpKernelContext* context, const int n_cube,
+void compute_aligning_loss_grad(OpKernelContext* context, const int n_cube,
     const int batch_size, const float* loss, const float* in_q,
     const float* in_dir, float* grad_q);
 
-REGISTER_OP("PrimitiveAligningLossV2")
+REGISTER_OP("PrimitiveAligningLoss")
 .Input("in_q: float")
 .Input("in_dir: float")
 .Output("out_loss: float")
@@ -22,13 +22,14 @@ REGISTER_OP("PrimitiveAligningLossV2")
   return Status::OK();
 })
 .Doc(R"doc(
-Compute consine distance between the input direction and the rotated direction
-according to input quaternion. The input direction should be unit direction.
+Compute the consine distance between the input direction and the rotated
+direction according to the input quaternion. The input direction should be a
+unit direction.
 )doc");
 
-class PrimitiveAligningLossV2Op : public OpKernel {
+class PrimitiveAligningLossOp : public OpKernel {
  public:
-  explicit PrimitiveAligningLossV2Op(OpKernelConstruction* context)
+  explicit PrimitiveAligningLossOp(OpKernelConstruction* context)
       : OpKernel(context) {}
 
   void Compute(OpKernelContext* context) override {
@@ -51,7 +52,7 @@ class PrimitiveAligningLossV2Op : public OpKernel {
     auto out_loss_ptr = out_loss->flat<float>().data();
 
     // compute aligning loss
-    compute_aligning_loss_v2(context, n_cube_, batch_size_, in_q_ptr,
+    compute_aligning_loss(context, n_cube_, batch_size_, in_q_ptr,
         in_dir_ptr, out_loss_ptr);
   }
 
@@ -59,10 +60,10 @@ class PrimitiveAligningLossV2Op : public OpKernel {
   int n_cube_;
   int batch_size_;
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveAligningLossV2").Device(DEVICE_GPU),
-    PrimitiveAligningLossV2Op);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveAligningLoss").Device(DEVICE_GPU),
+    PrimitiveAligningLossOp);
 
-REGISTER_OP("PrimitiveAligningLossV2Grad")
+REGISTER_OP("PrimitiveAligningLossGrad")
 .Input("gradient: float")
 .Input("in_q: float")
 .Input("in_dir: float")
@@ -72,12 +73,12 @@ REGISTER_OP("PrimitiveAligningLossV2Grad")
   return Status::OK();
 })
 .Doc(R"doc(
-Gradient for primitive aligning loss;
+Gradient for the primitive aligning loss;
 )doc");
 
-class PrimitiveAligningLossV2GradOp : public OpKernel {
+class PrimitiveAligningLossGradOp : public OpKernel {
  public:
-  explicit PrimitiveAligningLossV2GradOp(OpKernelConstruction* context)
+  explicit PrimitiveAligningLossGradOp(OpKernelConstruction* context)
     : OpKernel(context) {}
 
   void Compute(OpKernelContext* context) override {
@@ -104,7 +105,7 @@ class PrimitiveAligningLossV2GradOp : public OpKernel {
     auto grad_q_ptr = grad_q->flat<float>().data();
 
     // compute aligning loss gradient
-    compute_aligning_loss_grad_v2(context, n_cube_, batch_size_, gradients_ptr,
+    compute_aligning_loss_grad(context, n_cube_, batch_size_, gradients_ptr,
         in_q_ptr, in_dir_ptr, grad_q_ptr);
   }
 
@@ -112,7 +113,7 @@ class PrimitiveAligningLossV2GradOp : public OpKernel {
   int n_cube_;
   int batch_size_;
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveAligningLossV2Grad").Device(DEVICE_GPU),
-    PrimitiveAligningLossV2GradOp);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveAligningLossGrad").Device(DEVICE_GPU),
+    PrimitiveAligningLossGradOp);
 
 }  // namespace tensorflow

@@ -95,8 +95,8 @@ static __global__ void get_min_distance_cube_index(const int nthreads,
   }
 }
 
-void group_points_v3(OpKernelContext* context, const int n_point,
-    const int n_cube, const float* in_z, const float* in_q, const float* in_t,
+void group_points(OpKernelContext* context, const int n_point, const int n_cube,
+    const float* in_z, const float* in_q, const float* in_t,
     const float* in_pos, int* index) {
   // get GPU device
   GPUDevice d = context->eigen_device<GPUDevice>();

@@ -281,7 +281,7 @@ static std::vector<float> cube_surface_points_host_96 {
 //   -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, -0.8, -0.4, 0.0, 0.4, 0.8, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,
 // };
 
-void compute_consistency_loss_v2(OpKernelContext* context, const int n_cube,
+void compute_consistency_loss(OpKernelContext* context, const int n_cube,
     const int n_point, const int batch_size, const float num_sample,
     const float scale, const float* in_z, const float* in_q, const float* in_t,
     const float* in_pos, float* loss_ptr) {
@@ -406,11 +406,11 @@ void compute_consistency_loss_v2(OpKernelContext* context, const int n_cube,
   cudaMemcpy(loss_ptr, &loss, sizeof(float), cudaMemcpyHostToDevice);
 }
 
-void compute_consistency_loss_v2_grad(OpKernelContext* context,
-    const int n_cube, const int n_point, const int batch_size,
-    const float num_sample, const float scale, const float* loss,
-    const float* in_z, const float* in_q, const float* in_t,
-    const float* in_pos, float* grad_z, float* grad_q, float* grad_t) {
+void compute_consistency_loss_grad(OpKernelContext* context, const int n_cube,
+    const int n_point, const int batch_size, const float num_sample,
+    const float scale, const float* loss, const float* in_z, const float* in_q,
+    const float* in_t, const float* in_pos, float* grad_z, float* grad_q,
+    float* grad_t) {
   // get GPU device
   GPUDevice d = context->eigen_device<GPUDevice>();
   CudaLaunchConfig config;

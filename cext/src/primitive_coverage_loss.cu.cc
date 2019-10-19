@@ -7,6 +7,9 @@
 #include "tensorflow/core/util/cuda_kernel_helper.h"
 #include "tensorflow/core/platform/stream_executor.h"
 
+#include <thrust/execution_policy.h>
+#include <thrust/reduce.h>
+
 namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
@@ -64,6 +67,38 @@ static __device__ void grad_rotation_matrix_to_quaternion(
     const float* grad_rotation_matrix, const float qw, const float qx,
     const float qy, const float qz, float* gqw, float* gqx, float* gqy,
     float* gqz) {
+  // /* ----------- version one ----------- */
+  // float nqw = qw, nqx = qx, nqy = qy, nqz = qz;
+  // normalize(&nqw, &nqx, &nqy, &nqz);
+  // const float* m = grad_rotation_matrix;
+  // float t_gqw, t_gqx, t_gqy, t_gqz;
+  // t_gqw = 2 * nqx * (-m[5] + m[7]) + 2 * nqy * (m[2] - m[6]) +
+  //     2 * nqz * (-m[1] + m[3]);
+  // t_gqx = 2 * nqw * (-m[5] + m[7]) + 4 * nqx * (-m[4] - m[8]) +
+  //     2 * nqy * (m[1] + m[3]) + 2 * nqz * (m[2] + m[6]);
+  // t_gqy = 2 * nqw * (m[2] - m[6]) + 2 * nqx * (m[1] + m[3]) +
+  //     4 * nqy * (-m[0] - m[8]) + 2 * nqz * (m[5] + m[7]);
+  // t_gqz = 2 * nqw * (-m[1] + m[3]) + 2 * nqx * (m[2] + m[6]) +
+  //     2 * nqy * (m[5] + m[7]) + 4 * nqz * (-m[0] - m[4]);
+  // float denominator = sqrt(pow(qw*qw + qx*qx + qy*qy + qz*qz, 3));
+  // *gqw = (qx*qx + qy*qy + qz*qz) / denominator * t_gqw +
+  //        (-qx*qw) / denominator * t_gqx +
+  //        (-qy*qw) / denominator * t_gqy +
+  //        (-qz*qw) / denominator * t_gqz;
+  // *gqx = (-qw*qx) / denominator * t_gqw +
+  //        (qw*qw + qy*qy + qz*qz) / denominator * t_gqx +
+  //        (-qy*qx) / denominator * t_gqy +
+  //        (-qz*qx) / denominator * t_gqz;
+  // *gqy = (-qw*qy) / denominator * t_gqw +
+  //        (-qx*qy) / denominator * t_gqx +
+  //        (qw*qw + qx*qx + qz*qz) / denominator * t_gqy +
+  //        (-qz*qy) / denominator * t_gqz;
+  // *gqz = (-qw*qz) / denominator * t_gqw +
+  //        (-qx*qz) / denominator * t_gqx +
+  //        (-qy*qz) / denominator * t_gqy +
+  //        (qw*qw + qx*qx + qy*qy) / denominator * t_gqz;  
+
+  /* ----------- version two ----------- */
   const float* m = grad_rotation_matrix;
   float w = qw, x = qx, y = qy, z = qz;
   float w2 = w*w, x2 = x*x, y2 = y*y, z2 = z*z;
@@ -139,40 +174,13 @@ static __global__ void fill_point_cube_distance(const int nthreads,
   }
 }
 
-static __global__ void fill_group_cube_distance(const int nthreads,
-    const int n_cube, const int n_point, const float* point_cube_distance,
-    const int* point_group_index, float* group_cube_distance,
-    int* group_point_count) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
-    int point_index = index / n_cube;
-    int cube_index = index % n_cube;
-    int group_index = point_group_index[point_index];
-    CudaAtomicAdd(group_cube_distance + group_index * n_cube + cube_index,
-        point_cube_distance[index]);
-    if (cube_index == 0) {
-      CudaAtomicAdd(group_point_count + group_index, 1);
-    }
-  }
-}
-
-static __global__ void get_mean_distance(const int nthreads, const int n_cube,
-    const int* group_point_count, float* group_cube_distance) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
-    int group_index = index / n_cube;
-    int point_count = group_point_count[group_index];
-    if (point_count != 0) {
-      group_cube_distance[index] /= point_count;
-    }
-  }
-}
-
 static __global__ void get_min_distance_cube_index(const int nthreads,
-    const int n_cube, const float* group_cube_distance,
+    const int n_cube, const float* point_cube_distance,
     int* min_distance_cube_index) {
   CUDA_1D_KERNEL_LOOP(index, nthreads) {
-    const float* distance = group_cube_distance + index * n_cube;
+    const float* distance = point_cube_distance + index * n_cube;
     float min_val = distance[0];
-    float min_idx = 0;
+    int min_idx = 0;
     for (int i = 1; i < n_cube; ++i) {
       float d = distance[i];
       if (d < min_val) {
@@ -184,49 +192,29 @@ static __global__ void get_min_distance_cube_index(const int nthreads,
   }
 }
 
-static __global__ void get_cube_coverage_loss(const int nthreads,
-    const int n_cube, const int n_src_cube, const int batch_size,
-    const float* group_cube_distance, const int* min_distance_cube_index,
-    float* loss_ptr) {
+static __global__ void get_coverage_loss(const int nthreads, const int n_cube,
+    const int n_point, const float* point_cube_distance,
+    const int* min_distance_cube_index, float* loss_ptr) {
   CUDA_1D_KERNEL_LOOP(index, nthreads) {
-    float distance = group_cube_distance[index * n_cube +
+    float distance = point_cube_distance[index * n_cube +
         min_distance_cube_index[index]];
-    CudaAtomicAdd(loss_ptr, distance / (batch_size * n_src_cube));
-  }
-}
-
-static __global__ void fill_grad_group_cube_distance(const int nthreads,
-    const int n_cube, const int n_src_cube, const int batch_size,
-    const float* loss, const int* min_distance_cube_index,
-    float* grad_group_cube_distance) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
-    grad_group_cube_distance[index * n_cube + min_distance_cube_index[index]] =
-        (*loss) / (batch_size * n_src_cube);
+    CudaAtomicAdd(loss_ptr, distance / n_point);
   }
 }
 
 static __global__ void fill_grad_point_cube_distance(const int nthreads,
-    const int n_cube, const int n_point, const float* grad_group_cube_distance,
-    const int* point_group_index, const int* group_point_count,
-    float* grad_point_cube_distance) {
+    const int n_cube, const int n_point, const float* loss,
+    const int* min_distance_cube_index, float* grad_point_cube_distance) {
   CUDA_1D_KERNEL_LOOP(index, nthreads) {
-    int point_index = index / n_cube;
-    int cube_index = index % n_cube;
-    int group_index = point_group_index[point_index];
-    int point_count = group_point_count[group_index];
-    if (point_count != 0) {
-      grad_point_cube_distance[point_index * n_cube + cube_index] =
-          grad_group_cube_distance[group_index * n_cube + cube_index] /
-          point_count;
-    }
+    grad_point_cube_distance[index * n_cube + min_distance_cube_index[index]] =
+        (*loss) / n_point;
   }
 }
 
 static __global__ void fill_grad_wrt_zqt(const int nthreads, const int n_cube,
-    const int n_point, const float* in_z, const float* in_q,
-    const float* in_t, const float* in_pos,
-    const float* grad_point_cube_distance, float* grad_z, float* grad_q,
-    float* grad_t) {
+    const int n_point, const float* in_z, const float* in_q, const float* in_t,
+    const float* in_pos, const float* grad_point_cube_distance, float* grad_z,
+    float* grad_q, float* grad_t) {
   CUDA_1D_KERNEL_LOOP(index, nthreads) {
     int point_index = index / n_cube;
     int cube_index = index % n_cube;
@@ -242,7 +230,7 @@ static __global__ void fill_grad_wrt_zqt(const int nthreads, const int n_cube,
     float qw = q[0], qx = q[1], qy = q[2], qz = q[3];
     float rotation_matrix[9];
     conjugate(&qw, &qx, &qy, &qz);
-    float tmp_qw = qw, tmp_qx = qx, tmp_qy = qy, tmp_qz = qz;
+    float tmp_qw = qw, tmp_qx = qx, tmp_qy = qy, tmp_qz = qz;  // value before normalize
     as_rotation_matrix(qw, qx, qy, qz, rotation_matrix);
     matvec_kernel(rotation_matrix, &px, &py, &pz);
     float dx = MAX(abs(px) - z[0], 0);
@@ -310,11 +298,9 @@ static __global__ void fill_grad_wrt_zqt(const int nthreads, const int n_cube,
   }
 }
 
-void compute_cube_coverage_loss_v4(OpKernelContext* context, const int n_cube,
-    const int n_point, const int n_src_cube, const int batch_size,
-    const float* in_z, const float* in_q, const float* in_t,
-    const float* in_pos, const int* point_group_index, float* loss_ptr,
-    int* relatoin_ptr) {
+void compute_coverage_loss(OpKernelContext* context, const int n_cube,
+    const int n_point, const float* in_z, const float* in_q, const float* in_t,
+    const float* in_pos, float* loss_ptr) {
   // get GPU device
   GPUDevice d = context->eigen_device<GPUDevice>();
   CudaLaunchConfig config;
@@ -334,77 +320,40 @@ void compute_cube_coverage_loss_v4(OpKernelContext* context, const int n_cube,
           nthreads, n_cube, n_point, in_z, in_q, in_t, in_pos,
           point_cube_distance_ptr);
 
-  // aggregate group points distance, [n_src_cube, n_cube]
-  Tensor group_cube_distance;
-  const TensorShape group_cube_distance_shape({
-      batch_size, n_src_cube, n_cube});
-  OP_REQUIRES_OK(context, context->allocate_temp(DT_FLOAT,
-                              group_cube_distance_shape,
-                              &group_cube_distance));
-  auto group_cube_distance_ptr = group_cube_distance.flat<float>().data();
-  primitive::gpu_set_zero(context, group_cube_distance_ptr,
-      group_cube_distance.NumElements());
-  Tensor group_point_count;
-  const TensorShape group_point_count_shape({batch_size, n_src_cube});
-  OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32,
-                              group_point_count_shape, &group_point_count));
-  auto group_point_count_ptr = group_point_count.flat<int>().data();
-  primitive::gpu_set_zero(context, group_point_count_ptr,
-      group_point_count.NumElements());
-  nthreads = n_point * n_cube;
-  config = GetCudaLaunchConfig(nthreads, d);
-  fill_group_cube_distance
-      <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          nthreads, n_cube, n_point, point_cube_distance_ptr,
-          point_group_index, group_cube_distance_ptr, group_point_count_ptr);
-
-  // get mean group cube distance
-  nthreads = batch_size * n_src_cube * n_cube;
-  config = GetCudaLaunchConfig(nthreads, d);
-  get_mean_distance
-      <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          nthreads, n_cube, group_point_count_ptr, group_cube_distance_ptr);
-
   // get min distance cube index
   Tensor min_distance_cube_index;
-  const TensorShape min_distance_cube_index_shape({batch_size, n_src_cube});
+  const TensorShape min_distance_cube_index_shape({n_point});
   OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32,
                               min_distance_cube_index_shape,
                               &min_distance_cube_index));
   auto min_distance_cube_index_ptr = min_distance_cube_index.flat<int>().data();
-  nthreads = batch_size * n_src_cube;
+  nthreads = n_point;
   config = GetCudaLaunchConfig(nthreads, d);
   get_min_distance_cube_index
       <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          nthreads, n_cube, group_cube_distance_ptr,
-           min_distance_cube_index_ptr);
+          nthreads, n_cube, point_cube_distance_ptr,
+          min_distance_cube_index_ptr);
 
-  // set cube relation
-  cudaMemcpy(relatoin_ptr, min_distance_cube_index_ptr,
-      batch_size * n_src_cube * sizeof(int), cudaMemcpyDeviceToDevice);
-
-  // get cube coverage loss
+  // get coverage loss
   primitive::gpu_set_zero(context, loss_ptr, 1);
-  nthreads = batch_size * n_src_cube;
+  nthreads = n_point;
   config = GetCudaLaunchConfig(nthreads, d);
-  get_cube_coverage_loss
+  get_coverage_loss
       <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          nthreads, n_cube, n_src_cube, batch_size, group_cube_distance_ptr,
+          nthreads, n_cube, n_point, point_cube_distance_ptr,
           min_distance_cube_index_ptr, loss_ptr);
 }
 
-void compute_cube_coverage_loss_v4_grad(OpKernelContext* context,
-    const int n_cube, const int n_point, const int n_src_cube,
-    const int batch_size, const float* loss, const float* in_z,
-    const float* in_q, const float* in_t, const float* in_pos,
-    const int* point_group_index, float* grad_z, float* grad_q,
-    float* grad_t) {
+void compute_coverage_loss_grad(OpKernelContext* context, const int n_cube,
+    const int n_point, const int batch_size, const float* loss,
+    const float* in_z, const float* in_q, const float* in_t,
+    const float* in_pos, float* grad_z, float* grad_q, float* grad_t) {
   // get GPU device
   GPUDevice d = context->eigen_device<GPUDevice>();
   CudaLaunchConfig config;
   int nthreads;
 
-  /// -- prepare forward medial data for gradient computation -- 
+  /// -- prepare forward medial data for gradient computation --
   // fill point to cube distance matrix, [n_point, n_cube]
   Tensor point_cube_distance;
   const TensorShape point_cube_distance_shape({n_point, n_cube});
@@ -419,81 +368,34 @@ void compute_cube_coverage_loss_v4_grad(OpKernelContext* context,
           nthreads, n_cube, n_point, in_z, in_q, in_t, in_pos,
           point_cube_distance_ptr);
 
-  // aggregate group points distance, [n_src_cube, n_cube]
-  Tensor group_cube_distance;
-  const TensorShape group_cube_distance_shape({
-      batch_size, n_src_cube, n_cube});
-  OP_REQUIRES_OK(context, context->allocate_temp(DT_FLOAT,
-                              group_cube_distance_shape,
-                              &group_cube_distance));
-  auto group_cube_distance_ptr = group_cube_distance.flat<float>().data();
-  primitive::gpu_set_zero(context, group_cube_distance_ptr,
-      group_cube_distance.NumElements());
-  Tensor group_point_count;
-  const TensorShape group_point_count_shape({batch_size, n_src_cube});
-  OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32,
-                              group_point_count_shape, &group_point_count));
-  auto group_point_count_ptr = group_point_count.flat<int>().data();
-  primitive::gpu_set_zero(context, group_point_count_ptr,
-      group_point_count.NumElements());
-  nthreads = n_point * n_cube;
-  config = GetCudaLaunchConfig(nthreads, d);
-  fill_group_cube_distance
-      <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          nthreads, n_cube, n_point, point_cube_distance_ptr,
-          point_group_index, group_cube_distance_ptr, group_point_count_ptr);
-
-  // get mean group cube distance
-  nthreads = batch_size * n_src_cube * n_cube;
-  config = GetCudaLaunchConfig(nthreads, d);
-  get_mean_distance
-      <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          nthreads, n_cube, group_point_count_ptr, group_cube_distance_ptr);
-
   // get min distance cube index
   Tensor min_distance_cube_index;
-  const TensorShape min_distance_cube_index_shape({batch_size, n_src_cube});
+  const TensorShape min_distance_cube_index_shape({n_point});
   OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32,
                               min_distance_cube_index_shape,
                               &min_distance_cube_index));
   auto min_distance_cube_index_ptr = min_distance_cube_index.flat<int>().data();
-  nthreads = batch_size * n_src_cube;
+  nthreads = n_point;
   config = GetCudaLaunchConfig(nthreads, d);
   get_min_distance_cube_index
       <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          nthreads, n_cube, group_cube_distance_ptr,
-           min_distance_cube_index_ptr);
+          nthreads, n_cube, point_cube_distance_ptr,
+          min_distance_cube_index_ptr);
   /// ----------------------------------------------------------
 
-  // splash gradient to group points distance
-  Tensor grad_group_cube_distance;
-  const TensorShape ggcd_shape({batch_size, n_src_cube, n_cube});
-  OP_REQUIRES_OK(context, context->allocate_temp(DT_FLOAT, ggcd_shape,
-                              &grad_group_cube_distance));
-  auto ggcd_ptr = grad_group_cube_distance.flat<float>().data();
-  primitive::gpu_set_zero(context, ggcd_ptr,
-      grad_group_cube_distance.NumElements());
-  nthreads = batch_size * n_src_cube;
-  config = GetCudaLaunchConfig(nthreads, d);
-  fill_grad_group_cube_distance
-      <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          nthreads, n_cube, n_src_cube, batch_size, loss,
-          min_distance_cube_index_ptr, ggcd_ptr);
-
-  // gradient of point cube distance
+  // splash gradient to point cube distance
   Tensor grad_point_cube_distance;
   const TensorShape gpcd_shape({n_point, n_cube});
   OP_REQUIRES_OK(context, context->allocate_temp(DT_FLOAT, gpcd_shape,
                               &grad_point_cube_distance));
   auto gpcd_ptr = grad_point_cube_distance.flat<float>().data();
-  primitive::gpu_set_zero(context, gpcd_ptr,
-      grad_point_cube_distance.NumElements());
-  nthreads = n_point * n_cube;
+  primitive::gpu_set_zero(context, gpcd_ptr, n_point * n_cube);
+  nthreads = n_point;
   config = GetCudaLaunchConfig(nthreads, d);
   fill_grad_point_cube_distance
       <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          nthreads, n_cube, n_point, ggcd_ptr, point_group_index,
-          group_point_count_ptr, gpcd_ptr);
+          nthreads, n_cube, n_point, loss, min_distance_cube_index_ptr,
+          gpcd_ptr);
 
   // init zero gradient
   primitive::gpu_set_zero(context, grad_z, batch_size * n_cube * 3);

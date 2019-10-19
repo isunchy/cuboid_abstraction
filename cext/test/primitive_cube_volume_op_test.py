@@ -7,7 +7,7 @@ from tensorflow.python.framework import constant_op
 from tensorflow.python.platform import test
 
 sys.path.append('../..')
-from cext import primitive_cube_volume_v2
+from cext import primitive_cube_volume
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -18,7 +18,7 @@ class PrimitiveCubeVolumeTest(test.TestCase):
   def _VerifyValuesNew(self, in_z, expected):
     with self.test_session() as sess:
       z = constant_op.constant(in_z)
-      data_out = primitive_cube_volume_v2(z)
+      data_out = primitive_cube_volume(z)
       actual = sess.run(data_out)
     self.assertAllClose(expected, actual.flatten(), atol=1e-8)
 

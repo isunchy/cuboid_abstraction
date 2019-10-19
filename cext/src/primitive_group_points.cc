@@ -5,11 +5,11 @@
 
 namespace tensorflow {
 
-void group_points_v3(OpKernelContext* context, const int n_point,
-    const int n_cube, const float* in_z, const float* in_q, const float* in_t,
+void group_points(OpKernelContext* context, const int n_point, const int n_cube,
+    const float* in_z, const float* in_q, const float* in_t,
     const float* in_pos, int* index);
 
-REGISTER_OP("PrimitiveGroupPointsV3")
+REGISTER_OP("PrimitiveGroupPoints")
 .Input("in_z: float")
 .Input("in_q: float")
 .Input("in_t: float")
@@ -20,12 +20,12 @@ REGISTER_OP("PrimitiveGroupPointsV3")
   return Status::OK();
 })
 .Doc(R"doc(
-Group points by distance to the nearest cube.
+Group points by the nearest cube.
 )doc");
 
-class PrimitiveGroupPointsV3Op : public OpKernel {
+class PrimitiveGroupPointsOp : public OpKernel {
  public:
-  explicit PrimitiveGroupPointsV3Op(OpKernelConstruction* context)
+  explicit PrimitiveGroupPointsOp(OpKernelConstruction* context)
       : OpKernel(context) {}
 
   void Compute(OpKernelContext* context) override {
@@ -64,7 +64,7 @@ class PrimitiveGroupPointsV3Op : public OpKernel {
     auto index_output_ptr = index_output_tensor->flat<int>().data();
 
     // split points to group
-    group_points_v3(context, n_point_, n_cube_, in_z_ptr, in_q_ptr, in_t_ptr,
+    group_points(context, n_point_, n_cube_, in_z_ptr, in_q_ptr, in_t_ptr,
         in_pos_ptr, index_output_ptr);
   }
 
@@ -73,7 +73,7 @@ class PrimitiveGroupPointsV3Op : public OpKernel {
   int n_point_;
   int batch_size_;
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveGroupPointsV3").Device(DEVICE_GPU),
-    PrimitiveGroupPointsV3Op);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveGroupPoints").Device(DEVICE_GPU),
+    PrimitiveGroupPointsOp);
 
 }  // namespace tensorflow

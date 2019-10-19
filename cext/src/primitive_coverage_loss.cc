@@ -5,46 +5,34 @@
 
 namespace tensorflow {
 
-void compute_cube_coverage_loss_v4(OpKernelContext* context, const int n_cube,
-    const int n_point, const int n_src_cube, const int batch_size,
+void compute_coverage_loss(OpKernelContext* context, const int n_cube,
+    const int n_point, const float* in_z, const float* in_q, const float* in_t,
+    const float* in_pos, float* loss_ptr);
+
+void compute_coverage_loss_grad(OpKernelContext* context, const int n_cube,
+    const int n_point, const int batch_size, const float* loss,
     const float* in_z, const float* in_q, const float* in_t,
-    const float* in_pos, const int* point_group_index, float* loss_ptr,
-    int* relatoin_ptr);
+    const float* in_pos, float* grad_z, float* grad_q, float* grad_t);
 
-void compute_cube_coverage_loss_v4_grad(OpKernelContext* context,
-    const int n_cube, const int n_point, const int n_src_cube,
-    const int batch_size, const float* loss, const float* in_z,
-    const float* in_q, const float* in_t, const float* in_pos,
-    const int* point_group_index, float* grad_z, float* grad_q, float* grad_t);
-
-REGISTER_OP("PrimitiveCubeCoverageLossV4")
+REGISTER_OP("PrimitiveCoverageLoss")
 .Input("in_z: float")
 .Input("in_q: float")
 .Input("in_t: float")
 .Input("in_pos: float")
-.Input("in_point_index: int32")
-.Attr("n_src_cube: int")
 .Output("out_loss: float")
-.Output("out_relation: int32")
 .SetShapeFn([](shape_inference::InferenceContext* c) {
   c->set_output(0, c->MakeShape({1}));
-  int n_src_cube;
-  TF_RETURN_IF_ERROR(c->GetAttr("n_src_cube", &n_src_cube));
-  c->set_output(1, c->MakeShape({c->Dim(c->input(0), 0), n_src_cube}));
   return Status::OK();
 })
 .Doc(R"doc(
-The input point index split the point cloud into several groups. The input cube
-should cover one or more group of points.
+Compute the distance of every point that located outside all cubes with its
+nearest cube.
 )doc");
 
-
-class PrimitiveCubeCoverageLossV4Op : public OpKernel {
+class PrimitiveCoverageLossOp : public OpKernel {
  public:
-  explicit PrimitiveCubeCoverageLossV4Op(OpKernelConstruction* context)
-      : OpKernel(context) {
-    OP_REQUIRES_OK(context, context->GetAttr("n_src_cube", &n_src_cube_));
-  }
+  explicit PrimitiveCoverageLossOp(OpKernelConstruction* context)
+      :  OpKernel(context) {}
 
   void Compute(OpKernelContext* context) override {
     // in_z [bs, n_cube * 3]
@@ -71,16 +59,6 @@ class PrimitiveCubeCoverageLossV4Op : public OpKernel {
     CHECK_EQ(in_pos.dim_size(0), 4);
     n_point_ = in_pos.dim_size(1);
 
-    // in_point_index [n_point]
-    /// point group index is accumulated with batch size
-    /// [0, 1, ..., n_src_cube - 1,
-    ///  n_src_cube, n_src_cube + 1, ..., 2*n_src_cube - 1,
-    ///  ...,
-    ///  (batch_size - 1)*n_src_cube, ..., batch_size*n_src_cube - 1]
-    const Tensor& in_point_index = context->input(4);
-    CHECK_EQ(in_point_index.dim_size(0), n_point_);
-    auto in_point_index_ptr = in_point_index.flat<int>().data();
-
     // out loss
     Tensor* out_loss = nullptr;
     TensorShape out_loss_shape({1});
@@ -88,37 +66,26 @@ class PrimitiveCubeCoverageLossV4Op : public OpKernel {
                                 out_loss_shape, &out_loss));
     auto out_loss_ptr = out_loss->flat<float>().data();
 
-    // out relation
-    Tensor* out_relation = nullptr;
-    TensorShape out_relation_shape({batch_size_, n_src_cube_});
-    OP_REQUIRES_OK(context, context->allocate_output("out_relation",
-                                out_relation_shape, &out_relation));
-    auto out_relation_ptr = out_relation->flat<int>().data();
-
-    // compute cube coverage loss
-    compute_cube_coverage_loss_v4(context, n_cube_, n_point_, n_src_cube_,
-        batch_size_, in_z_ptr, in_q_ptr, in_t_ptr, in_pos_ptr,
-        in_point_index_ptr, out_loss_ptr, out_relation_ptr);
+    // compute coverage loss
+    compute_coverage_loss(context, n_cube_, n_point_, in_z_ptr, in_q_ptr,
+        in_t_ptr, in_pos_ptr, out_loss_ptr);
   }
 
  private:
   int n_cube_;
-  int n_point_;
-  int n_src_cube_;
+  int n_point_;  // the sum of batch size point clouds' points
   int batch_size_;
 };
-REGISTER_KERNEL_BUILDER(Name("PrimitiveCubeCoverageLossV4").Device(DEVICE_GPU),
-    PrimitiveCubeCoverageLossV4Op);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveCoverageLoss").Device(DEVICE_GPU),
+    PrimitiveCoverageLossOp);
 
 
-REGISTER_OP("PrimitiveCubeCoverageLossV4Grad")
+REGISTER_OP("PrimitiveCoverageLossGrad")
 .Input("gradient: float")
 .Input("in_z: float")
 .Input("in_q: float")
 .Input("in_t: float")
 .Input("in_pos: float")
-.Input("in_point_index: int32")
-.Attr("n_src_cube: int")
 .Output("grad_z: float")
 .Output("grad_q: float")
 .Output("grad_t: float")
@@ -129,15 +96,13 @@ REGISTER_OP("PrimitiveCubeCoverageLossV4Grad")
   return Status::OK();
 })
 .Doc(R"doc(
-Gradient for cube coverage loss.
+Gradient for the coverage loss.
 )doc");
 
-class PrimitiveCubeCoverageLossV4GradOp : public OpKernel {
+class PrimitiveCoverageLossGradOp : public OpKernel {
  public:
-  explicit PrimitiveCubeCoverageLossV4GradOp(OpKernelConstruction* context)
-      : OpKernel(context) {
-    OP_REQUIRES_OK(context, context->GetAttr("n_src_cube", &n_src_cube_));
-  }
+  explicit PrimitiveCoverageLossGradOp(OpKernelConstruction* context)
+      : OpKernel(context) {}
 
   void Compute(OpKernelContext* context) override {
     // in gradients
@@ -168,11 +133,6 @@ class PrimitiveCubeCoverageLossV4GradOp : public OpKernel {
     CHECK_EQ(in_pos.dim_size(0), 4);
     n_point_ = in_pos.dim_size(1);
 
-    // in_point_index [n_point]
-    const Tensor& in_point_index = context->input(5);
-    CHECK_EQ(in_point_index.dim_size(0), n_point_);
-    auto in_point_index_ptr = in_point_index.flat<int>().data();
-
     // grad_z
     Tensor* grad_z = nullptr;
     TensorShape grad_z_shape = in_z.shape();
@@ -194,20 +154,18 @@ class PrimitiveCubeCoverageLossV4GradOp : public OpKernel {
                                 grad_t_shape, &grad_t));
     auto grad_t_ptr = grad_t->flat<float>().data();
 
-    // compute cube coverage loss gradient
-    compute_cube_coverage_loss_v4_grad(context, n_cube_, n_point_, n_src_cube_,
-        batch_size_, gradients_ptr, in_z_ptr, in_q_ptr, in_t_ptr, in_pos_ptr,
-        in_point_index_ptr, grad_z_ptr, grad_q_ptr, grad_t_ptr);
+    // compute coverage loss gradient
+    compute_coverage_loss_grad(context, n_cube_, n_point_, batch_size_,
+        gradients_ptr, in_z_ptr, in_q_ptr, in_t_ptr, in_pos_ptr, grad_z_ptr,
+        grad_q_ptr, grad_t_ptr);
   }
 
  private:
   int n_cube_;
   int n_point_;
-  int n_src_cube_;
   int batch_size_;
 };
-REGISTER_KERNEL_BUILDER(
-    Name("PrimitiveCubeCoverageLossV4Grad").Device(DEVICE_GPU),
-    PrimitiveCubeCoverageLossV4GradOp);
+REGISTER_KERNEL_BUILDER(Name("PrimitiveCoverageLossGrad").Device(DEVICE_GPU),
+    PrimitiveCoverageLossGradOp);
 
 }  // namespace tensorflow
